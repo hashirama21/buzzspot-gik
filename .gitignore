@@ -14,9 +14,9 @@ env/
 # Jupyter
 .ipynb_checkpoints/
 
-# Data & weights (too large for git)
-data/
-weights/
+# Data & weights (too large for git — root-level only)
+/data/
+/weights/
 outputs/
 submissions/
 
