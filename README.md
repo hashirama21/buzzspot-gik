@@ -34,6 +34,15 @@ buzzspot/
 ├── evaluation/
 │   └── metrics/coco_eval.py           ← mAP@0.5:0.95 + per-class/size/attribute
 │
+├── tools/                             ← devkit utilities (ported from official kit)
+│   ├── buzzset_loader.py              ← BuzzSetSF / BuzzSetMF dataset classes
+│   ├── evaluate.py                    ← official Codabench scoring
+│   ├── evaluate_detailed.py           ← PR curves + attribute-stratified metrics
+│   ├── convert.py                     ← COCO/YOLO single-frame conversion
+│   ├── validate_submission.py         ← Codabench submission validator
+│   ├── sahi_inferencer.py             ← SAHI-sliced RF-DETR inference
+│   └── visualize.py                   ← keyframe + context GIF visualization
+│
 ├── scripts/
 │   ├── train.py                       ← training entry point (Hydra)
 │   ├── infer.py                       ← inference + predictions.json generation
@@ -141,6 +150,37 @@ pytest tests/ -v
 | WBF ensemble | Transformer + CNN ensemble, better than NMS for overlapping tiny boxes |
 | Pseudo-labeling | GroundingDINO + SAM2 on test set — semi-supervised gain without annotation |
 
+## Devkit tools (`src/tools/`)
+
+Ported from the [official BuzzSpot dev-kit](https://github.com/lereiss/buzzspot-devkit) (MIT) into `src/tools/` for direct use in our pipeline:
+
+| Module | Contents |
+|---|---|
+| `buzzset_loader.py` | `BuzzSetSF` / `BuzzSetMF` — authoritative dataset loaders |
+| `evaluate.py` | `evaluate()` — official Codabench scoring (mAP@0.5:0.95 + per-class) |
+| `evaluate_detailed.py` | `evaluate_detailed()` — PR curves, confusion matrix, attribute-stratified recall |
+| `_eval_helper.py` | Greedy matching, AP, plotting helpers |
+| `_generate_report.py` | HTML eval report generator |
+| `convert.py` | `to_coco()` / `to_yolo()` — convert multi-frame BuzzSet to single-frame |
+| `validate_submission.py` | `run()` — validate submission ZIP before Codabench upload |
+| `sahi_inferencer.py` | `RFDETR_SAHI_Inferencer` — SAHI-sliced RF-DETR inference |
+| `visualize.py` | `show_keyframe()`, `make_context_gif()`, `display_context_gif()` |
+
+```bash
+# Convert to single-frame COCO (for YOLOv11 baseline)
+python -m src.tools.convert data/buzzset/ data/buzzset_sf/ --format coco
+
+# Validate submission before upload
+python -m src.tools.validate_submission --zipfile submissions/predictions.zip \
+    --test_file data/buzzset/annotations/test.json
+
+# Run official evaluation locally
+python -m src.tools.evaluate \
+    --res submissions/predictions.json \
+    --ref data/buzzset/annotations/valid.json \
+    -o outputs/eval/
+```
+
 ## Competition details
 
 - **Challenge**: CVPPA@ECCV 2026 — BuzzSpot
@@ -148,3 +188,4 @@ pytest tests/ -v
 - **Submission**: `predictions.json` zipped, uploaded to Codabench
 - **Deadline**: 26 June 2026 (dev phase)
 - **Contact**: buzzspot.challenge.cvppa@uni-bonn.de
+- **License**: MIT (devkit) — see `LICENSE`
