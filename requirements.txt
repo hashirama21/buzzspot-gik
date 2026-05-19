@@ -1,0 +1,53 @@
+# ─── Core ML ────────────────────────────────────────────────
+torch>=2.3.0
+torchvision>=0.18.0
+torchaudio>=2.3.0
+
+# ─── Detection & Vision ─────────────────────────────────────
+# Official RF-DETR (install after torch)
+# pip install rfdetr
+# GitHub: roboflow/rf-detr
+
+albumentations>=1.4.0
+opencv-python-headless>=4.9.0
+Pillow>=10.3.0
+
+# ─── COCO Evaluation ────────────────────────────────────────
+pycocotools>=2.0.7
+
+# ─── Config Management ──────────────────────────────────────
+hydra-core>=1.3.2
+omegaconf>=2.3.0
+
+# ─── Data Science ───────────────────────────────────────────
+numpy>=1.26.0
+scipy>=1.13.0
+pandas>=2.2.0
+scikit-learn>=1.4.0
+
+# ─── Ensemble ───────────────────────────────────────────────
+# Weighted Boxes Fusion (production ensemble)
+# pip install ensemble-boxes
+# GitHub: ZFTurbo/Weighted-Boxes-Fusion
+
+# ─── Tracking (temporal post-processing) ────────────────────
+# ByteTrack (install separately)
+# pip install bytetracker
+# GitHub: FoundationVision/ByteTrack
+
+# ─── Optional: Optical Flow ─────────────────────────────────
+# RAFT is included in torchvision >= 0.13 via torchvision.models.optical_flow
+
+# ─── Pseudo-labeling (optional, week 4) ─────────────────────
+# pip install groundingdino-py
+# pip install segment-anything-2
+
+# ─── Logging ────────────────────────────────────────────────
+wandb>=0.17.0
+tensorboard>=2.17.0
+tqdm>=4.66.0
+
+# ─── Utilities ──────────────────────────────────────────────
+rich>=13.7.0
+matplotlib>=3.9.0
+seaborn>=0.13.0

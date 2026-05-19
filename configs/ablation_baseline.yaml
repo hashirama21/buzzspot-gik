@@ -1,0 +1,19 @@
+# Ablation: baseline RF-DETR without temporal
+defaults:
+  - default
+
+model:
+  name: rfdetr_baseline
+  temporal_head:
+    type: none
+  attribute_heads:
+    enabled: false
+
+data:
+  temporal:
+    strategy: none
+
+training:
+  experiment_name: rfdetr_baseline
+  curriculum:
+    enabled: false

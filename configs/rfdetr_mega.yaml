@@ -1,0 +1,16 @@
+# RF-DETR + MEGA temporal aggregation
+defaults:
+  - default
+
+model:
+  name: rfdetr_mega
+  temporal_head:
+    type: mega
+    local_memory_size: 5        # matches our 5-frame window
+    global_memory_size: 20
+    relation_module_dim: 256
+
+training:
+  experiment_name: rfdetr_mega_v1
+  batch_size: 4                 # MEGA is memory-heavy
+  accumulate_grad_batches: 8
