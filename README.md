@@ -1,6 +1,8 @@
 # BuzzSpot Challenge — CVPPA@ECCV 2026
 # Pollinator Detection: Bees · Bumblebees · Hoverflies · Moths
 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/hashirama21/buzzspot-gik/blob/main/notebooks/buzzspot_pipeline.ipynb)
+
 ## Project structure
 
 ```
