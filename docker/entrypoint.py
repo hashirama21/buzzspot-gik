@@ -41,7 +41,6 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"[Entrypoint] Device    : {device}")
 
-    # ── Load checkpoint ───────────────────────────────────────
     if not WEIGHTS.exists():
         print(f"ERROR: Weights not found at {WEIGHTS}")
         sys.exit(1)
@@ -62,7 +61,6 @@ def main():
 
     predictor = BuzzSpotPredictor(model, cfg, device=device)
 
-    # ── Load test annotations ─────────────────────────────────
     test_ann = INPUT_DIR / "test.json"
     if not test_ann.exists():
         # Fallback: look for any JSON in input
@@ -94,7 +92,6 @@ def main():
         if (i + 1) % 100 == 0:
             print(f"  {i + 1}/{len(images)} — cumulative dets: {len(all_predictions)}")
 
-    # ── Write output ──────────────────────────────────────────
     out_json = OUTPUT_DIR / "predictions.json"
     with open(out_json, "w") as f:
         json.dump(all_predictions, f)

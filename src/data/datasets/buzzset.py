@@ -95,9 +95,7 @@ class BuzzSetDataset(Dataset):
             strategy=temporal_strategy,
         )
 
-    # ──────────────────────────────────────────────────────────
     # Curriculum interface
-    # ──────────────────────────────────────────────────────────
 
     def set_curriculum_phase(self, phase: int) -> None:
         """Switch between curriculum phases.
@@ -122,9 +120,7 @@ class BuzzSetDataset(Dataset):
                 return False
         return True
 
-    # ──────────────────────────────────────────────────────────
     # Core interface
-    # ──────────────────────────────────────────────────────────
 
     def __len__(self) -> int:
         return len(self.img_ids)
@@ -140,7 +136,6 @@ class BuzzSetDataset(Dataset):
         keyframe = frames[-1]  # HWC uint8
         bboxes, labels, ann_ids, attributes = self._parse_annotations(anns)
 
-        # ── Spatial augmentation (numpy in, numpy out) ────────
         if self.transforms and not self.is_test:
             result   = self.transforms(
                 image=keyframe,
@@ -156,14 +151,12 @@ class BuzzSetDataset(Dataset):
             attributes = [a for a in attributes if a["ann_id"] in surviving]
             frames[-1] = keyframe
 
-        # ── Copy-paste augmentation ────────────────────────────
         if self.copy_paste_aug is not None and not self.is_test:
             keyframe, bboxes, labels, attributes = self.copy_paste_aug(
                 keyframe, bboxes, labels, attributes
             )
             frames[-1] = keyframe
 
-        # ── Build temporal tensor (CHW float32, normalized) ───
         tensor = self.frame_loader.build_tensor(frames)
 
         target = self._build_target(img_id, bboxes, labels, attributes, img_meta)
@@ -173,9 +166,7 @@ class BuzzSetDataset(Dataset):
 
         return {"image": tensor, "target": target, "img_id": img_id}
 
-    # ──────────────────────────────────────────────────────────
     # Helpers
-    # ──────────────────────────────────────────────────────────
 
     def _parse_annotations(
         self, anns: List[Dict]

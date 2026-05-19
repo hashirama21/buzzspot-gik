@@ -9,9 +9,7 @@ import numpy as np
 import torch
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # TemporalFrameLoader
-# ─────────────────────────────────────────────────────────────────────────────
 
 class TestTemporalFrameLoader:
     def _make_frames(self, n: int, h: int = 64, w: int = 64):
@@ -79,9 +77,7 @@ class TestTemporalFrameLoader:
             )
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # TileExtractor
-# ─────────────────────────────────────────────────────────────────────────────
 
 class TestTileExtractor:
     def test_grid_covers_image(self):
@@ -123,9 +119,7 @@ class TestTileExtractor:
         assert len(boxes_kept) > 0
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Losses
-# ─────────────────────────────────────────────────────────────────────────────
 
 class TestLosses:
     def test_focal_loss_shape(self):
@@ -194,9 +188,7 @@ class TestLosses:
         assert losses["loss_total"].item() >= 0.0
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # WBF
-# ─────────────────────────────────────────────────────────────────────────────
 
 class TestWBF:
     def test_single_box_passthrough(self):
@@ -231,9 +223,7 @@ class TestWBF:
         assert len(b) == 2
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # TTA inversion
-# ─────────────────────────────────────────────────────────────────────────────
 
 class TestTTAInversion:
     def test_hflip(self):
@@ -258,9 +248,7 @@ class TestTTAInversion:
         np.testing.assert_array_almost_equal(inv, boxes)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Model
-# ─────────────────────────────────────────────────────────────────────────────
 
 class TestModel:
     def test_forward_no_temporal(self):

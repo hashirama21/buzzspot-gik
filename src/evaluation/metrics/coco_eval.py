@@ -53,9 +53,7 @@ class BuzzSpotEvaluator:
         self._predictions = []
         self._image_ids   = []
 
-    # ──────────────────────────────────────────────────────────
     # Accumulate
-    # ──────────────────────────────────────────────────────────
 
     def update(
         self,
@@ -106,9 +104,7 @@ class BuzzSpotEvaluator:
             if img_id not in self._image_ids:
                 self._image_ids.append(img_id)
 
-    # ──────────────────────────────────────────────────────────
     # Compute metrics
-    # ──────────────────────────────────────────────────────────
 
     def summarize(self) -> Dict[str, float]:
         """Run COCO eval and return metrics dict (COCO stdout suppressed)."""
@@ -156,9 +152,7 @@ class BuzzSpotEvaluator:
 
         return metrics
 
-    # ──────────────────────────────────────────────────────────
     # Submission format
-    # ──────────────────────────────────────────────────────────
 
     def to_submission(self, out_path: str) -> str:
         out = Path(out_path)
@@ -168,9 +162,7 @@ class BuzzSpotEvaluator:
         log.info("Saved %d predictions → %s", len(self._predictions), out)
         return str(out)
 
-    # ──────────────────────────────────────────────────────────
     # Helpers
-    # ──────────────────────────────────────────────────────────
 
     @staticmethod
     def _run_eval(coco_eval: COCOeval) -> None:

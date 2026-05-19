@@ -79,9 +79,7 @@ class BuzzSpotTrainer:
 
         self.logger = self._build_logger()
 
-    # ──────────────────────────────────────────────────────────
     # Main train loop
-    # ──────────────────────────────────────────────────────────
 
     def fit(self, train_loader: DataLoader, val_loader: DataLoader) -> None:
         cfg = self.cfg.training
@@ -116,9 +114,7 @@ class BuzzSpotTrainer:
                 val_metrics.get("mAP_50_95", 0.0),
             )
 
-    # ──────────────────────────────────────────────────────────
     # Training step
-    # ──────────────────────────────────────────────────────────
 
     def _train_epoch(self, loader: DataLoader) -> Dict[str, float]:
         self.model.train()
@@ -166,9 +162,7 @@ class BuzzSpotTrainer:
         self.optimizer.zero_grad()
         self.global_step += 1
 
-    # ──────────────────────────────────────────────────────────
     # Validation step
-    # ──────────────────────────────────────────────────────────
 
     @torch.no_grad()
     def _val_epoch(self, loader: DataLoader) -> Dict[str, float]:
@@ -192,9 +186,7 @@ class BuzzSpotTrainer:
 
         return self._evaluator.summarize()
 
-    # ──────────────────────────────────────────────────────────
     # Curriculum scheduling
-    # ──────────────────────────────────────────────────────────
 
     def _apply_curriculum_phase(self, loader: DataLoader, epoch: int) -> None:
         phase1 = self.cfg.training.curriculum.phase1_epochs
@@ -207,9 +199,7 @@ class BuzzSpotTrainer:
             ds.set_curriculum_phase(2)
             log.info("[Curriculum] Phase 2 — all samples (degraded weighted higher).")
 
-    # ──────────────────────────────────────────────────────────
     # Checkpoint & early stopping
-    # ──────────────────────────────────────────────────────────
 
     def _save_checkpoint(self, metric: float, epoch: int, improved: bool) -> None:
         ckpt = {
@@ -236,9 +226,7 @@ class BuzzSpotTrainer:
             self.epochs_no_improve += 1
         return self.epochs_no_improve >= self.cfg.training.early_stopping.patience
 
-    # ──────────────────────────────────────────────────────────
     # Optimiser & scheduler builders
-    # ──────────────────────────────────────────────────────────
 
     def _build_optimizer(self) -> torch.optim.Optimizer:
         opt_cfg = self.cfg.training.optimizer
@@ -278,9 +266,7 @@ class BuzzSpotTrainer:
 
         return torch.optim.lr_scheduler.LambdaLR(self.optimizer, lr_lambda)
 
-    # ──────────────────────────────────────────────────────────
     # Logger
-    # ──────────────────────────────────────────────────────────
 
     def _build_logger(self):
         try:

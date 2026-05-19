@@ -52,9 +52,7 @@ def denormalize(tensor: torch.Tensor) -> np.ndarray:
     return img.clip(0, 255).astype(np.uint8)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Training transforms  (output: numpy HWC uint8)
-# ─────────────────────────────────────────────────────────────────────────────
 
 def get_train_transforms(tile_size: int = 256) -> A.Compose:
     """Spatial augmentation pipeline for training — returns numpy uint8.
@@ -71,7 +69,6 @@ def get_train_transforms(tile_size: int = 256) -> A.Compose:
 
     return A.Compose(
         [
-            # ── Geometric ──────────────────────────────────────
             A.HorizontalFlip(p=0.5),
             A.VerticalFlip(p=0.5),
             A.RandomRotate90(p=0.5),
@@ -83,7 +80,6 @@ def get_train_transforms(tile_size: int = 256) -> A.Compose:
                 p=0.4,
             ),
 
-            # ── Photometric ────────────────────────────────────
             A.ColorJitter(
                 brightness=0.4, contrast=0.4, saturation=0.4, hue=0.1, p=0.8
             ),
@@ -100,7 +96,6 @@ def get_train_transforms(tile_size: int = 256) -> A.Compose:
                 num_flare_circles_upper=6, src_radius=100, p=0.05,
             ),
 
-            # ── Motion blur — simulates fast insect flight ─────
             A.OneOf(
                 [
                     A.MotionBlur(blur_limit=(3, 15), p=1.0),
@@ -110,14 +105,12 @@ def get_train_transforms(tile_size: int = 256) -> A.Compose:
             ),
             A.GaussianBlur(blur_limit=(3, 7), p=0.2),
 
-            # ── Occlusion simulation ──────────────────────────
             A.CoarseDropout(
                 max_holes=4, max_height=32, max_width=32,
                 min_holes=1, min_height=8, min_width=8,
                 fill_value=0, p=0.3,
             ),
 
-            # ── Resize to tile ────────────────────────────────
             A.RandomSizedBBoxSafeCrop(
                 height=tile_size, width=tile_size,
                 erosion_rate=0.0,
@@ -135,9 +128,7 @@ def get_train_transforms(tile_size: int = 256) -> A.Compose:
     )
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Validation transforms  (output: numpy HWC uint8)
-# ─────────────────────────────────────────────────────────────────────────────
 
 def get_val_transforms(tile_size: int = 256) -> A.Compose:
     """Resize + pad only — no augmentation, no normalization."""
@@ -159,9 +150,7 @@ def get_val_transforms(tile_size: int = 256) -> A.Compose:
     )
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # TTA transforms  (output: numpy HWC uint8 + inversion tag)
-# ─────────────────────────────────────────────────────────────────────────────
 
 @dataclass
 class TTATransform:

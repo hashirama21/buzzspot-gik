@@ -45,7 +45,6 @@ def main():
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    # ── Step 1: Generate pseudo-labels ────────────────────────
     print("=== Step 1 — Generating pseudo-labels ===")
     gdino = GroundingDINOWrapper(
         config_path=args.gdino_cfg or "",
@@ -59,7 +58,6 @@ def main():
     generator = PseudoLabelGenerator(gdino, sam2, confidence_threshold=args.conf)
     generator.run(args.test_ann, args.test_dir, args.out_ann)
 
-    # ── Step 2: Self-train on pseudo-labels ───────────────────
     if args.epochs > 0:
         print(f"\n=== Step 2 — Self-training for {args.epochs} epochs ===")
         # Entry point is src/train.py (Hydra-based)

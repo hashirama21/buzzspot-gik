@@ -24,9 +24,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Positional encoding
-# ─────────────────────────────────────────────────────────────────────────────
 
 class TemporalPositionalEncoding(nn.Module):
     """Sinusoidal encoding for temporal position (frame index 0 = oldest)."""
@@ -50,9 +48,7 @@ class TemporalPositionalEncoding(nn.Module):
         return x + self.pe[:T].unsqueeze(0).unsqueeze(2)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Temporal Query Fusion
-# ─────────────────────────────────────────────────────────────────────────────
 
 class TemporalQueryFusion(nn.Module):
     """Cross-attention between detection queries and temporal frame features.
@@ -104,9 +100,7 @@ class TemporalQueryFusion(nn.Module):
         return queries
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Attribute head (blur / occlusion)
-# ─────────────────────────────────────────────────────────────────────────────
 
 class AttributeHead(nn.Module):
     """Binary classification head for blur and occlusion attributes."""
@@ -124,9 +118,7 @@ class AttributeHead(nn.Module):
         return self.head(x)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # RF-DETR Temporal — full model wrapper
-# ─────────────────────────────────────────────────────────────────────────────
 
 class RFDETRTemporal(nn.Module):
     """RF-DETR + TemporalQueryFusion + AttributeHead.
@@ -165,12 +157,10 @@ class RFDETRTemporal(nn.Module):
                 "Supported: 'query_fusion', 'none'."
             )
 
-        # ── Core RF-DETR backbone + decoder ──────────────────
         self.rfdetr, self._using_real_rfdetr = self._build_backbone(
             num_classes, d_model, num_queries, pretrained
         )
 
-        # ── Temporal fusion ───────────────────────────────────
         if temporal_type == "query_fusion" and num_frames > 1:
             self.temporal_fusion: Optional[nn.Module] = TemporalQueryFusion(
                 d_model=d_model,
@@ -180,14 +170,11 @@ class RFDETRTemporal(nn.Module):
         else:
             self.temporal_fusion = None
 
-        # ── Attribute heads ───────────────────────────────────
         self.use_attribute_heads = use_attribute_heads
         if use_attribute_heads:
             self.attribute_head = AttributeHead(d_model=d_model, num_attributes=2)
 
-    # ──────────────────────────────────────────────────────────
     # Forward
-    # ──────────────────────────────────────────────────────────
 
     def forward(
         self,
@@ -234,9 +221,7 @@ class RFDETRTemporal(nn.Module):
         N, D     = features.shape[1], features.shape[2]
         return features.view(B, T, N, D)
 
-    # ──────────────────────────────────────────────────────────
     # Backbone builder
-    # ──────────────────────────────────────────────────────────
 
     def _build_backbone(
         self,

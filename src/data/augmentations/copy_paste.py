@@ -93,7 +93,6 @@ class CopyPasteAugmentor:
 
         return image, bboxes, labels, attributes
 
-    # ──────────────────────────────────────────────────────────
 
     def _build_library(self) -> Dict[str, List[Path]]:
         library: Dict[str, List[Path]] = {}

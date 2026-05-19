@@ -32,9 +32,7 @@ import numpy as np
 import torch
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Grounding DINO wrapper
-# ─────────────────────────────────────────────────────────────────────────────
 
 class GroundingDINOWrapper:
     """Thin wrapper around the official GroundingDINO API."""
@@ -102,9 +100,7 @@ class GroundingDINOWrapper:
             return np.zeros((0, 4)), np.zeros(0), []
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # SAM 2 mask refiner
-# ─────────────────────────────────────────────────────────────────────────────
 
 class SAM2MaskRefiner:
     """Uses SAM 2 to refine coarse G-DINO boxes into precise masks."""
@@ -154,9 +150,7 @@ class SAM2MaskRefiner:
             return boxes_xyxy
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Full pseudo-labeling pipeline
-# ─────────────────────────────────────────────────────────────────────────────
 
 class PseudoLabelGenerator:
     """Generates COCO-format pseudo-annotations for unlabelled test images."""
@@ -253,7 +247,6 @@ class PseudoLabelGenerator:
 
         print(f"[PseudoLabel] Generated {len(pseudo_anns)} annotations → {out_path}")
 
-    # ──────────────────────────────────────────────────────────
 
     @staticmethod
     def _cxcywh_to_xyxy_px(

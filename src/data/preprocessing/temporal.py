@@ -59,7 +59,6 @@ class TemporalFrameLoader:
         if strategy == "flow":
             self._raft = self._init_raft()
 
-    # ──────────────────────────────────────────────────────────
 
     def load(self, keyframe_path: Path) -> List[np.ndarray]:
         """Return list of frames [t-(N-1), ..., t-1, t] as HWC uint8."""
@@ -81,9 +80,7 @@ class TemporalFrameLoader:
         # strategy == "flow"
         return self._flow(frames)
 
-    # ──────────────────────────────────────────────────────────
     # Private helpers
-    # ──────────────────────────────────────────────────────────
 
     def _resolve_context_paths(self, keyframe_path: Path) -> List[Path]:
         """Resolve paths for t-(num_frames-1) … t, padding with duplicates."""

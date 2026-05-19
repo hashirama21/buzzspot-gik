@@ -17,9 +17,7 @@ import torch.nn.functional as F
 from scipy.optimize import linear_sum_assignment
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Focal Loss
-# ─────────────────────────────────────────────────────────────────────────────
 
 class FocalLoss(nn.Module):
     """Sigmoid focal loss with optional per-class gamma.
@@ -79,9 +77,7 @@ class FocalLoss(nn.Module):
         return loss.sum() / (valid_mask.float().sum() + 1e-6)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # CIoU Loss
-# ─────────────────────────────────────────────────────────────────────────────
 
 def ciou_loss(
     pred: torch.Tensor,
@@ -140,9 +136,7 @@ def ciou_loss(
     return loss.mean()
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Hungarian Matcher
-# ─────────────────────────────────────────────────────────────────────────────
 
 class HungarianMatcher(nn.Module):
     """Bipartite matching between predictions and ground-truth."""
@@ -222,9 +216,7 @@ def _batch_giou(boxes1: torch.Tensor, boxes2: torch.Tensor) -> torch.Tensor:
     return iou - (enc - union) / enc
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Combined criterion
-# ─────────────────────────────────────────────────────────────────────────────
 
 class BuzzSpotCriterion(nn.Module):
     """Master loss combining focal, CIoU, and attribute losses.
@@ -280,7 +272,6 @@ class BuzzSpotCriterion(nn.Module):
             w += (self.occ_w  - 1) * occ.float()
             instance_weights.append(w)
 
-        # ── CIoU loss with per-instance weighting ─────────────
         if pred_boxes_matched:
             pred_boxes_m = torch.cat(pred_boxes_matched)
             gt_boxes_m   = torch.cat(gt_boxes_matched)
@@ -291,7 +282,6 @@ class BuzzSpotCriterion(nn.Module):
         else:
             loss_ciou = outputs["pred_boxes"].sum() * 0.0
 
-        # ── Focal classification loss ──────────────────────────
         B, Q, C = outputs["pred_logits"].shape
         query_targets = torch.full(
             (B, Q), -1, dtype=torch.long,
@@ -304,7 +294,6 @@ class BuzzSpotCriterion(nn.Module):
 
         loss_cls = self.focal(outputs["pred_logits"], query_targets)
 
-        # ── Attribute loss ────────────────────────────────────
         loss_attr = outputs["pred_boxes"].sum() * 0.0
         if "pred_attributes" in outputs and pred_boxes_matched:
             pred_attr_m = torch.cat(

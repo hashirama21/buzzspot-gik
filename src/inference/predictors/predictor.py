@@ -32,9 +32,7 @@ from src.data.augmentations.transforms import (
 log = logging.getLogger(__name__)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Weighted Boxes Fusion
-# ─────────────────────────────────────────────────────────────────────────────
 
 def weighted_boxes_fusion(
     boxes_list:   List[np.ndarray],
@@ -111,9 +109,7 @@ def _iou_batch(boxes_a: np.ndarray, boxes_b: np.ndarray) -> np.ndarray:
     return inter / union
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Box inversion helpers
-# ─────────────────────────────────────────────────────────────────────────────
 
 def _invert_transform(boxes: np.ndarray, tta_name: str) -> np.ndarray:
     """Invert TTA spatial transforms on normalised XYXY boxes."""
@@ -125,9 +121,7 @@ def _invert_transform(boxes: np.ndarray, tta_name: str) -> np.ndarray:
     return b
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Main Predictor
-# ─────────────────────────────────────────────────────────────────────────────
 
 class BuzzSpotPredictor:
     """Full inference pipeline: temporal context + tiling + TTA + WBF."""
@@ -180,7 +174,6 @@ class BuzzSpotPredictor:
         self.score_thr = inf_cfg.confidence_threshold
         self.wbf_iou   = inf_cfg.tiling.merge_iou_threshold
 
-    # ──────────────────────────────────────────────────────────
 
     @torch.no_grad()
     def predict(self, keyframe_path: str, image_id: int) -> List[Dict[str, Any]]:
@@ -224,9 +217,7 @@ class BuzzSpotPredictor:
 
         return self._to_coco_results(merged_boxes, merged_scores, merged_labels, image_id, H, W)
 
-    # ──────────────────────────────────────────────────────────
     # Temporal context
-    # ──────────────────────────────────────────────────────────
 
     def _encode_context(
         self, frames: List[np.ndarray]
@@ -248,9 +239,7 @@ class BuzzSpotPredictor:
         with autocast(device_type=self.device.type, enabled=self.use_amp):
             return self.model.encode_context_frames(ctx)
 
-    # ──────────────────────────────────────────────────────────
     # TTA
-    # ──────────────────────────────────────────────────────────
 
     def _run_tta(
         self,
@@ -295,9 +284,7 @@ class BuzzSpotPredictor:
             labels[keep].cpu().numpy(),
         )
 
-    # ──────────────────────────────────────────────────────────
     # Helpers
-    # ──────────────────────────────────────────────────────────
 
     @staticmethod
     def _remap_to_full(

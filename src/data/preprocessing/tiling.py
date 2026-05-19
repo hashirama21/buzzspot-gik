@@ -32,9 +32,7 @@ class TileExtractor:
     ) -> None:
         self.cfg = TileConfig(size=size, overlap=overlap, min_visibility=min_visibility)
 
-    # ──────────────────────────────────────────────────────────
     # Training: single sample → list of tile samples
-    # ──────────────────────────────────────────────────────────
 
     def extract(
         self,
@@ -70,9 +68,7 @@ class TileExtractor:
 
         return results if results else [{"image": image, "target": target, "tile_offset": (0, 0), "img_id": target["image_id"]}]
 
-    # ──────────────────────────────────────────────────────────
     # Inference: build tile grid from image array
-    # ──────────────────────────────────────────────────────────
 
     def get_tile_grid(self, H: int, W: int) -> List[Tuple[int, int, int, int]]:
         """Return list of (x0, y0, x1, y1) pixel coordinates."""
@@ -103,9 +99,7 @@ class TileExtractor:
         boxes[:, [1, 3]] /= full_H
         return np.clip(boxes, 0.0, 1.0)
 
-    # ──────────────────────────────────────────────────────────
     # Private
-    # ──────────────────────────────────────────────────────────
 
     def _remap_boxes(
         self,
