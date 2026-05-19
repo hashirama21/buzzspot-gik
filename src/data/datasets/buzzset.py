@@ -52,6 +52,9 @@ class BuzzSetDataset(Dataset):
     CAT_ID_TO_IDX = {1: 0, 2: 1, 3: 2, 4: 3}
     IDX_TO_CAT_ID = {v: k for k, v in CAT_ID_TO_IDX.items()}
 
+    # BuzzSet on-disk split directory names (annotation split → directory name)
+    _SPLIT_DIR = {"train": "train", "val": "valid", "test": "test_devphase"}
+
     def __init__(
         self,
         ann_file: str,
@@ -84,8 +87,22 @@ class BuzzSetDataset(Dataset):
         for ann in coco.get("annotations", []):
             self.annotations[ann["image_id"]].append(ann)
 
-        self._all_img_ids: List[int] = list(self.images.keys())
-        self.img_ids: List[int]      = list(self._all_img_ids)
+        # Only train/evaluate on keyframes (annotated frames).
+        # BuzzSet includes 5 unannotated context frames per keyframe; they must be excluded.
+        all_images = coco["images"]
+        has_keyframe_flag = any("is_keyframe" in img for img in all_images)
+        if has_keyframe_flag:
+            keyframe_ids = {img["id"] for img in all_images if img.get("is_keyframe", False)}
+        else:
+            # Fallback: use images that have at least one annotation (test set has none)
+            keyframe_ids = set(self.images.keys()) if self.is_test else {
+                img_id for img_id, anns in self.annotations.items() if anns
+            }
+
+        self._all_img_ids: List[int] = [
+            img_id for img_id in self.images if img_id in keyframe_ids
+        ]
+        self.img_ids: List[int] = list(self._all_img_ids)
 
         self.tile_extractor = TileExtractor(**tile_cfg) if tile_cfg else None
 
@@ -130,7 +147,8 @@ class BuzzSetDataset(Dataset):
         img_meta = self.images[img_id]
         anns     = self.annotations[img_id]
 
-        img_path = self.img_dir / img_meta["file_name"]
+        split_dirname = self._SPLIT_DIR.get(self.split, self.split)
+        img_path = self.img_dir / split_dirname / img_meta["file_name"]
         frames   = self.frame_loader.load(img_path)
 
         keyframe = frames[-1]  # HWC uint8

@@ -64,7 +64,7 @@ class BuzzSpotTrainer:
         self.best_metric      = 0.0
         self.epochs_no_improve = 0
 
-        self.out_dir = Path(cfg.project.output_dir) / cfg.training.experiment_name
+        self.out_dir = Path(cfg.project.output_dir) / cfg.project.experiment_name
         self.out_dir.mkdir(parents=True, exist_ok=True)
 
         # Cache evaluator — JSON loaded once, reset each epoch
@@ -273,7 +273,7 @@ class BuzzSpotTrainer:
             import wandb
             wandb.init(
                 project=self.cfg.project.name,
-                name=self.cfg.training.experiment_name,
+                name=self.cfg.project.experiment_name,
                 config=OmegaConf.to_container(self.cfg, resolve=True),
             )
             return wandb

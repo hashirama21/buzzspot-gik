@@ -69,10 +69,19 @@ def main():
     with open(args.test_ann) as f:
         test_coco = json.load(f)
 
-    all_predictions = []
-    n = len(test_coco["images"])
+    # Run inference only on keyframes (context frames have no annotations and
+    # must not be submitted — the validator will reject them).
+    all_images = test_coco["images"]
+    has_flag = any("is_keyframe" in img for img in all_images)
+    keyframes = (
+        [img for img in all_images if img.get("is_keyframe", False)]
+        if has_flag else all_images
+    )
 
-    for i, img_meta in enumerate(test_coco["images"]):
+    all_predictions = []
+    n = len(keyframes)
+
+    for i, img_meta in enumerate(keyframes):
         img_path = Path(args.test_dir) / img_meta["file_name"]
         preds = predictor.predict(str(img_path), img_meta["id"])
         all_predictions.extend(preds)

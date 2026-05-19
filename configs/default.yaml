@@ -7,9 +7,6 @@ project:
   output_dir: outputs/
   experiment_name: rfdetr_temporal_v1
 
-# ─────────────────────────────────────────
-# Dataset
-# ─────────────────────────────────────────
 data:
   root: data/buzzset/
   train_ann: data/buzzset/annotations/train.json
@@ -17,33 +14,26 @@ data:
   test_ann:  data/buzzset/annotations/test.json
   num_classes: 4
   class_names: [bee, bumblebee, hoverfly, moth]
-  # Category IDs matching competition format
   category_ids: {bee: 1, bumblebee: 2, hoverfly: 3, moth: 4}
 
   tile:
     enabled: true
     size: 256
-    overlap: 32           # overlap in pixels between tiles
-    min_visibility: 0.1   # minimum bbox visibility ratio to keep annotation
+    overlap: 32
+    min_visibility: 0.1
 
   temporal:
-    num_frames: 6         # current + 5 previous
+    num_frames: 6         # current + 5 previous (total = 6)
     strategy: stack       # stack | diff | flow | none
-    # stack: concatenate frames as 18-channel input
-    # diff:  absolute frame differences as extra channels
-    # flow:  optical flow via RAFT (heavy, week 3+)
 
   num_workers: 8
   pin_memory: true
 
-# ─────────────────────────────────────────
-# Model
-# ─────────────────────────────────────────
 model:
-  name: rfdetr_temporal       # rfdetr_temporal | rfdetr_mega | rfdetr_baseline
-  backbone: dinov2_large      # dinov2_base | dinov2_large
+  name: rfdetr_temporal
+  backbone: dinov2_large
   pretrained: true
-  pretrained_weights: null    # path to custom weights, null = HuggingFace
+  pretrained_weights: null    # path to .pth weights, null = HuggingFace default
   num_queries: 300
   hidden_dim: 256
   nhead: 8
@@ -52,30 +42,27 @@ model:
   dropout: 0.1
 
   temporal_head:
-    type: query_fusion        # query_fusion | channel_stack | none
+    type: query_fusion        # query_fusion | none
     num_frames: 6
     cross_attn_heads: 4
 
-  # Auxiliary heads for blur/occlusion attributes
   attribute_heads:
     enabled: true
     attributes: [blur, occlusion]
     loss_weight: 0.5
 
-# ─────────────────────────────────────────
-# Training
-# ─────────────────────────────────────────
 training:
+  experiment_name: rfdetr_temporal_v1   # overridable via CLI
   epochs: 100
-  batch_size: 8             # per GPU
+  batch_size: 8
   accumulate_grad_batches: 4
   num_gpus: 1
-  precision: 16             # mixed precision
+  precision: 16
 
   optimizer:
     name: adamw
     lr: 1.0e-4
-    backbone_lr_factor: 0.1  # lower LR for pretrained backbone
+    backbone_lr_factor: 0.1
     weight_decay: 1.0e-4
     betas: [0.9, 0.999]
 
@@ -86,13 +73,13 @@ training:
 
   curriculum:
     enabled: true
-    # Phase 1: clean samples only (no blur/occlusion)
     phase1_epochs: 20
-    # Phase 2: all samples, degraded ones weighted higher
     blur_weight: 2.0
     occlusion_weight: 2.0
 
-  # Class-balanced sampling
+  # WeightedRandomSampler is disabled when curriculum is active
+  # (incompatible index spaces — curriculum uses img_ids; sampler uses fixed indices).
+  # Set to "class_balanced" only when curriculum.enabled is false.
   sampler:
     name: class_balanced
     oversample_classes: [moth, hoverfly]
@@ -100,30 +87,25 @@ training:
 
   early_stopping:
     enabled: true
-    monitor: mAP_50_95   # matches evaluator.summarize() dict key (no prefix)
+    monitor: mAP_50_95
     patience: 20
     mode: max
 
   checkpoint:
-    save_top_k: 3
-    monitor: mAP_50_95   # matches evaluator.summarize() dict key (no prefix)
+    monitor: mAP_50_95
     mode: max
 
-# ─────────────────────────────────────────
-# Losses
-# ─────────────────────────────────────────
 losses:
   classification:
     name: focal
     gamma: 2.0
     alpha: 0.25
-    # Per-class gamma override for rare classes
     per_class_gamma:
       moth: 3.0
       hoverfly: 2.5
 
   bbox_regression:
-    name: ciou         # ciou | giou | l1
+    name: ciou
     weight: 5.0
 
   attribute:
@@ -135,19 +117,14 @@ losses:
     cost_bbox: 5.0
     cost_giou: 2.0
 
-# ─────────────────────────────────────────
-# Augmentations
-# ─────────────────────────────────────────
 augmentations:
   train:
-    # Geometric
     horizontal_flip: 0.5
     vertical_flip: 0.5
     random_rotate90: 0.5
     random_scale: [0.8, 1.2]
-    random_crop_safe: true   # crop while keeping annotations
+    random_crop_safe: true
 
-    # Photometric — critical for 11-day field variability
     color_jitter:
       brightness: 0.4
       contrast: 0.4
@@ -158,7 +135,6 @@ augmentations:
     random_fog: 0.1
     random_sun_flare: 0.1
 
-    # Blur simulation — matches real flight dynamics
     motion_blur:
       prob: 0.4
       kernel_size: [3, 15]
@@ -167,47 +143,38 @@ augmentations:
       prob: 0.2
       kernel_range: [3, 7]
 
-    # Occlusion simulation
     random_erasing:
       prob: 0.3
       scale: [0.02, 0.15]
       ratio: [0.3, 3.3]
 
-    # Copy-Paste (SAM 2 derived masks)
     copy_paste:
       enabled: true
       masks_dir: data/sam2_masks/
       prob: 0.5
-      classes: [moth, hoverfly]  # boost rare classes
+      classes: [moth, hoverfly]
 
-    # Mixup / Mosaic
     mosaic:
       prob: 0.3
       n_tiles: 4
 
   val:
-    resize: 256  # tile size — no augmentation
+    resize: 256
 
-# ─────────────────────────────────────────
-# Inference
-# ─────────────────────────────────────────
 inference:
-  # Test-Time Augmentation
   tta:
     enabled: true
     scales: [0.8, 1.0, 1.2]
     flips: [none, horizontal, vertical]
     merge: wbf
 
-  # Tile-based inference (SAHI-style)
   tiling:
     enabled: true
     tile_size: 256
     overlap: 32
     merge_iou_threshold: 0.5
-    merge_type: wbf  # nms | wbf
+    merge_type: wbf
 
-  # Ensemble
   ensemble:
     enabled: true
     models:
@@ -221,24 +188,19 @@ inference:
     iou_threshold: 0.5
     score_threshold: 0.01
 
-  # Post-processing
   nms:
     iou_threshold: 0.5
     score_threshold: 0.01
     class_agnostic: false
 
-  # Tracking (temporal consistency)
   tracking:
     enabled: true
-    method: bytetrack  # bytetrack | sort
+    method: bytetrack
     min_hits: 1
     max_age: 5
 
   confidence_threshold: 0.3
 
-# ─────────────────────────────────────────
-# Pseudo-labeling (semi-supervised)
-# ─────────────────────────────────────────
 pseudo_labeling:
   enabled: false
   gdino_model: groundingdino_swint_ogc
@@ -250,18 +212,15 @@ pseudo_labeling:
   self_training_epochs: 2
   confidence_filter: 0.5
 
-# ─────────────────────────────────────────
-# Evaluation
-# ─────────────────────────────────────────
 evaluation:
   iou_thresholds: [0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95]
   primary_metric: mAP_50_95
   per_class: true
-  per_attribute: true    # blur / occlusion subsets
-  per_size: true         # small / medium / large AP
+  per_attribute: true
+  per_size: true
   size_thresholds:
-    small: 32            # < 32² pixels
-    medium: 96           # 32² to 96²
+    small: 32
+    medium: 96
   log_confusion_matrix: true
   visualize_predictions: true
   num_viz_samples: 50

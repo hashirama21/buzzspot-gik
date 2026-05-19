@@ -189,6 +189,43 @@ class RFDETRTemporal(nn.Module):
         Returns:
             dict with keys: pred_logits, pred_boxes, [pred_attributes]
         """
+        if self._using_real_rfdetr:
+            return self._forward_real(pixel_values, context_features)
+        return self._forward_stub(pixel_values, context_features)
+
+    def _forward_real(
+        self,
+        pixel_values: torch.Tensor,
+        context_features: Optional[torch.Tensor],
+    ) -> Dict[str, torch.Tensor]:
+        """Forward pass using the real rfdetr package.
+
+        Temporal fusion is skipped — rfdetr does not expose query internals.
+        The model is used as a black box that produces pred_logits + pred_boxes.
+        """
+        inner = self.rfdetr.model  # rfdetr's inner nn.Module (RT-DETR)
+        out   = inner(pixel_values)
+        # rfdetr returns a dict or a namespace; normalise to our format
+        if isinstance(out, dict):
+            pred_logits = out.get("pred_logits", out.get("logits"))
+            pred_boxes  = out.get("pred_boxes",  out.get("boxes"))
+        else:
+            pred_logits = out.pred_logits
+            pred_boxes  = out.pred_boxes
+        result = {"pred_logits": pred_logits, "pred_boxes": pred_boxes}
+        if self.use_attribute_heads:
+            # Attribute head runs on the decoder output; approximate with pred_logits
+            result["pred_attributes"] = self.attribute_head(
+                pred_logits.detach().clone()
+            )
+        return result
+
+    def _forward_stub(
+        self,
+        pixel_values: torch.Tensor,
+        context_features: Optional[torch.Tensor],
+    ) -> Dict[str, torch.Tensor]:
+        """Forward pass using the development stub (full temporal fusion)."""
         encoder_out = self.rfdetr.backbone(pixel_values)  # (B, N, d_model)
 
         queries = self.rfdetr.query_embed.weight.unsqueeze(0).expand(
@@ -213,8 +250,11 @@ class RFDETRTemporal(nn.Module):
 
     def encode_context_frames(
         self, context_pixels: torch.Tensor  # (B, T, C, H, W)
-    ) -> torch.Tensor:
-        """Encode context frames → (B, T, N, d_model)."""
+    ) -> Optional[torch.Tensor]:
+        """Encode context frames → (B, T, N, d_model), or None with real rfdetr."""
+        if self._using_real_rfdetr:
+            # rfdetr does not expose the backbone separately; temporal fusion skipped.
+            return None
         B, T, C, H, W = context_pixels.shape
         flat     = context_pixels.view(B * T, C, H, W)
         features = self.rfdetr.backbone(flat)   # (B*T, N, d_model)
@@ -233,9 +273,10 @@ class RFDETRTemporal(nn.Module):
         """Try official rfdetr package; fall back to stub with warning."""
         try:
             from rfdetr import RFDETRLarge
+            # rfdetr API: pretrain_weights=None → downloads default HuggingFace weights
             model = RFDETRLarge(
                 num_classes=num_classes,
-                pretrained=pretrained,
+                pretrain_weights=None if pretrained else "",
             )
             return model, True
         except ImportError:

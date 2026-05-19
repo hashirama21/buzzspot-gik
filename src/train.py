@@ -117,24 +117,28 @@ def build_dataloaders(cfg: DictConfig):
     log.info("Dataset sizes — train: %d | val: %d", len(train_ds), len(val_ds))
     log.info("Class counts: %s", train_ds.class_counts)
 
-    # Curriculum: start in phase 1 (clean images only)
-    if cfg.training.curriculum.enabled:
+    # Curriculum and WeightedRandomSampler cannot be combined:
+    # curriculum modifies img_ids (changes dataset length), while the sampler
+    # is built with fixed-length indices.  Use shuffle when curriculum is on.
+    curriculum_on = cfg.training.curriculum.enabled
+    if curriculum_on:
         train_ds.set_curriculum_phase(1)
 
-    # Class-balanced sampler via inverse frequency weighting
     sampler = None
-    if cfg.training.sampler.name == "class_balanced":
+    use_shuffle = True
+    if cfg.training.sampler.name == "class_balanced" and not curriculum_on:
         sample_weights = train_ds.compute_sample_weights()
         sampler = WeightedRandomSampler(
             weights=sample_weights,
             num_samples=len(sample_weights),
             replacement=True,
         )
+        use_shuffle = False
 
     train_loader = DataLoader(
         train_ds,
         batch_size=cfg.training.batch_size,
-        shuffle=(sampler is None),
+        shuffle=use_shuffle,
         sampler=sampler,
         num_workers=cfg.data.num_workers,
         pin_memory=cfg.data.pin_memory,
