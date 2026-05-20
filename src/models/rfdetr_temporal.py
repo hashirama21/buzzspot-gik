@@ -200,11 +200,13 @@ class RFDETRTemporal(nn.Module):
     ) -> Dict[str, torch.Tensor]:
         """Forward pass using the real rfdetr package.
 
-        Temporal fusion is skipped — rfdetr does not expose query internals.
-        The model is used as a black box that produces pred_logits + pred_boxes.
+        rfdetr.model is a ModelContext (context manager) that wraps the actual
+        RT-DETR nn.Module. Temporal fusion is skipped — rfdetr does not expose
+        query internals. The model is used as a black box.
         """
-        inner = self.rfdetr.model  # rfdetr's inner nn.Module (RT-DETR)
-        out   = inner(pixel_values)
+        with self.rfdetr.model as inner:
+            out = inner(pixel_values)
+
         # rfdetr returns a dict or a namespace; normalise to our format
         if isinstance(out, dict):
             pred_logits = out.get("pred_logits", out.get("logits"))
@@ -212,9 +214,9 @@ class RFDETRTemporal(nn.Module):
         else:
             pred_logits = out.pred_logits
             pred_boxes  = out.pred_boxes
+
         result = {"pred_logits": pred_logits, "pred_boxes": pred_boxes}
         if self.use_attribute_heads:
-            # Attribute head runs on the decoder output; approximate with pred_logits
             result["pred_attributes"] = self.attribute_head(
                 pred_logits.detach().clone()
             )
