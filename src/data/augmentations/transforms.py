@@ -65,7 +65,6 @@ def get_train_transforms(tile_size: int = 256) -> A.Compose:
         label_fields=["class_labels", "ann_ids"],
         min_visibility=0.1,
         clip=True,
-        filter_lost_elements=True,
     )
 
     return A.Compose(
@@ -139,7 +138,6 @@ def get_val_transforms(tile_size: int = 256) -> A.Compose:
         label_fields=["class_labels", "ann_ids"],
         min_visibility=0.0,
         clip=True,
-        filter_lost_elements=True,
     )
     return A.Compose(
         [
