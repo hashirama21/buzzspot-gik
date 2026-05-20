@@ -65,6 +65,7 @@ def get_train_transforms(tile_size: int = 256) -> A.Compose:
         label_fields=["class_labels", "ann_ids"],
         min_visibility=0.1,
         clip=True,
+        filter_lost_elements=True,
     )
 
     return A.Compose(
@@ -90,10 +91,10 @@ def get_train_transforms(tile_size: int = 256) -> A.Compose:
                 brightness_limit=0.3, contrast_limit=0.3, p=0.5
             ),
             A.RandomShadow(p=0.3),
-            A.RandomFog(fog_coef_lower=0.05, fog_coef_upper=0.2, alpha_coef=0.1, p=0.1),
+            A.RandomFog(fog_coef_range=(0.05, 0.2), alpha_coef=0.1, p=0.1),
             A.RandomSunFlare(
-                flare_roi=(0, 0, 1, 0.5), num_flare_circles_lower=3,
-                num_flare_circles_upper=6, src_radius=100, p=0.05,
+                flare_roi=(0, 0, 1, 0.5), num_flare_circles_range=(3, 6),
+                src_radius=100, p=0.05,
             ),
 
             A.OneOf(
@@ -106,8 +107,9 @@ def get_train_transforms(tile_size: int = 256) -> A.Compose:
             A.GaussianBlur(blur_limit=(3, 7), p=0.2),
 
             A.CoarseDropout(
-                max_holes=4, max_height=32, max_width=32,
-                min_holes=1, min_height=8, min_width=8,
+                num_holes_range=(1, 4),
+                hole_height_range=(8, 32),
+                hole_width_range=(8, 32),
                 p=0.3,
             ),
 
@@ -137,6 +139,7 @@ def get_val_transforms(tile_size: int = 256) -> A.Compose:
         label_fields=["class_labels", "ann_ids"],
         min_visibility=0.0,
         clip=True,
+        filter_lost_elements=True,
     )
     return A.Compose(
         [
