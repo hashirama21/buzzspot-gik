@@ -49,7 +49,7 @@ def build_model(cfg: DictConfig) -> torch.nn.Module:
         temporal_type=cfg.model.temporal_head.type,
         num_temporal_heads=cfg.model.temporal_head.cross_attn_heads,
         use_attribute_heads=cfg.model.attribute_heads.enabled,
-        pretrained=cfg.model.pretrained,
+        pretrained=cfg.model.get("pretrained", True),
     )
 
 
