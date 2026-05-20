@@ -2,12 +2,14 @@
 BuzzSpot Trainer — PyTorch training loop.
 
 Features:
-- Mixed precision (AMP, torch.amp API)
+- Mixed precision (AMP) with fp16 / bf16 selection
+- torch.compile support (PyTorch >= 2.0)
+- Backbone freeze schedule (unfreeze at epoch N, rebuilds optimizer)
+- Fused AdamW (CUDA, PyTorch >= 2.0)
 - Curriculum learning (clean → all samples, with instance weighting)
 - Gradient accumulation with correct last-batch handling
 - Per-class mAP logging via WandB / TensorBoard
-- Early stopping + checkpoint saving (metric key auto-stripped of prefix)
-- Cached COCO evaluator (JSON loaded once per run)
+- Early stopping + checkpoint saving
 """
 from __future__ import annotations
 
@@ -50,30 +52,43 @@ class BuzzSpotTrainer:
         self.device    = device or torch.device(
             "cuda" if torch.cuda.is_available() else "cpu"
         )
-        self.use_amp   = cfg.training.precision == 16 and self.device.type == "cuda"
+
+        # AMP dtype: bf16 preferred on Ampere+ (A100, L4); fp16 on T4/V100
+        amp_dtype_str = cfg.training.get("amp_dtype", "fp16")
+        self._amp_dtype = torch.bfloat16 if amp_dtype_str == "bf16" else torch.float16
+        self.use_amp = cfg.training.precision == 16 and self.device.type == "cuda"
 
         self.model.to(self.device)
         self.criterion.to(self.device)
+
+        # Backbone freeze: train decoder+temporal head first, unfreeze at epoch N
+        self._freeze_epochs = cfg.training.get("freeze_backbone_epochs", 0)
+        if self._freeze_epochs > 0:
+            self._set_backbone_grad(False)
+            log.info("Backbone frozen for first %d epochs.", self._freeze_epochs)
 
         self.optimizer = self._build_optimizer()
         self.scheduler = self._build_scheduler()
         self.scaler    = GradScaler(device=self.device.type, enabled=self.use_amp)
 
-        self.current_epoch    = 0
-        self.global_step      = 0
-        self.best_metric      = 0.0
+        # torch.compile: ~60s warmup cost, then +15-35% throughput
+        if cfg.training.get("compile", False) and hasattr(torch, "compile"):
+            log.info("Compiling model with torch.compile …")
+            self.model = torch.compile(self.model)
+
+        self.current_epoch     = 0
+        self.global_step       = 0
+        self.best_metric       = 0.0
         self.epochs_no_improve = 0
 
         self.out_dir = Path(cfg.project.output_dir) / cfg.project.experiment_name
         self.out_dir.mkdir(parents=True, exist_ok=True)
 
-        # Cache evaluator — JSON loaded once, reset each epoch
         self._evaluator = BuzzSpotEvaluator(
             ann_file=cfg.data.val_ann,
             class_names=list(cfg.data.class_names),
         )
 
-        # Strip "val/" prefix from monitor key so it matches evaluator dict keys
         raw_monitor = cfg.training.checkpoint.monitor
         self._monitor_key = raw_monitor.rsplit("/", 1)[-1]
 
@@ -87,6 +102,13 @@ class BuzzSpotTrainer:
         for epoch in range(self.current_epoch, cfg.epochs):
             self.current_epoch = epoch
 
+            # Unfreeze backbone and rebuild optimizer at the scheduled epoch
+            if self._freeze_epochs > 0 and epoch == self._freeze_epochs:
+                self._set_backbone_grad(True)
+                self.optimizer = self._build_optimizer()
+                self.scheduler = self._build_scheduler()
+                log.info("[Epoch %d] Backbone unfrozen — optimizer rebuilt.", epoch)
+
             if cfg.curriculum.enabled:
                 self._apply_curriculum_phase(train_loader, epoch)
 
@@ -98,11 +120,10 @@ class BuzzSpotTrainer:
 
             self.scheduler.step()
 
-            metric = val_metrics.get(self._monitor_key, 0.0)
-
-            # Check improvement BEFORE updating best_metric
+            metric  = val_metrics.get(self._monitor_key, 0.0)
             improved = metric > self.best_metric
             self._save_checkpoint(metric, epoch, improved)
+
             if cfg.early_stopping.enabled and self._check_early_stop(improved):
                 log.info("Early stopping triggered at epoch %d.", epoch)
                 break
@@ -125,16 +146,17 @@ class BuzzSpotTrainer:
         self.optimizer.zero_grad()
 
         for step, batch in enumerate(loader):
-            images  = batch["image"].to(self.device)
+            images  = batch["image"].to(self.device, non_blocking=True)
             targets = [
-                {k: v.to(self.device) for k, v in t.items()}
+                {k: v.to(self.device, non_blocking=True) for k, v in t.items()}
                 for t in batch["target"]
             ]
             context = batch.get("context_features")
             if context is not None:
-                context = context.to(self.device)
+                context = context.to(self.device, non_blocking=True)
 
-            with autocast(device_type=self.device.type, enabled=self.use_amp):
+            with autocast(device_type=self.device.type, enabled=self.use_amp,
+                          dtype=self._amp_dtype):
                 outputs = self.model(images, context_features=context)
                 losses  = self.criterion(outputs, targets)
                 loss    = losses["loss_total"] / accum_steps
@@ -148,7 +170,6 @@ class BuzzSpotTrainer:
                 total_losses[k] = total_losses.get(k, 0.0) + v.item()
             n_batches += 1
 
-        # Flush any remaining accumulated gradients (last incomplete batch group)
         if n_batches % accum_steps != 0:
             self._optimizer_step()
 
@@ -159,7 +180,7 @@ class BuzzSpotTrainer:
         nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=0.1)
         self.scaler.step(self.optimizer)
         self.scaler.update()
-        self.optimizer.zero_grad()
+        self.optimizer.zero_grad(set_to_none=True)
         self.global_step += 1
 
     # Validation step
@@ -170,21 +191,29 @@ class BuzzSpotTrainer:
         self._evaluator.reset()
 
         for batch in loader:
-            images  = batch["image"].to(self.device)
+            images  = batch["image"].to(self.device, non_blocking=True)
             targets = [
-                {k: v.to(self.device) for k, v in t.items()}
+                {k: v.to(self.device, non_blocking=True) for k, v in t.items()}
                 for t in batch["target"]
             ]
             context = batch.get("context_features")
             if context is not None:
-                context = context.to(self.device)
+                context = context.to(self.device, non_blocking=True)
 
-            with autocast(device_type=self.device.type, enabled=self.use_amp):
+            with autocast(device_type=self.device.type, enabled=self.use_amp,
+                          dtype=self._amp_dtype):
                 outputs = self.model(images, context_features=context)
 
             self._evaluator.update(outputs, targets)
 
         return self._evaluator.summarize()
+
+    # Backbone freeze helpers
+
+    def _set_backbone_grad(self, requires_grad: bool) -> None:
+        for name, p in self.model.named_parameters():
+            if "backbone" in name:
+                p.requires_grad_(requires_grad)
 
     # Curriculum scheduling
 
@@ -219,7 +248,6 @@ class BuzzSpotTrainer:
             log.info("  ✓ New best checkpoint — %.4f", metric)
 
     def _check_early_stop(self, improved: bool) -> bool:
-        """Returns True if training should stop."""
         if improved:
             self.epochs_no_improve = 0
         else:
@@ -235,7 +263,7 @@ class BuzzSpotTrainer:
         for name, p in self.model.named_parameters():
             if not p.requires_grad:
                 continue
-            if "backbone" in name or "rfdetr.backbone" in name:
+            if "backbone" in name:
                 backbone_params.append(p)
             else:
                 other_params.append(p)
@@ -244,11 +272,22 @@ class BuzzSpotTrainer:
             {"params": other_params,    "lr": opt_cfg.lr},
             {"params": backbone_params, "lr": opt_cfg.lr * opt_cfg.backbone_lr_factor},
         ]
-        return torch.optim.AdamW(
-            param_groups,
-            weight_decay=opt_cfg.weight_decay,
-            betas=tuple(opt_cfg.betas),
-        )
+
+        # Fused AdamW: ~20% faster optimizer step on CUDA (PyTorch >= 2.0)
+        use_fused = self.device.type == "cuda"
+        try:
+            return torch.optim.AdamW(
+                param_groups,
+                weight_decay=opt_cfg.weight_decay,
+                betas=tuple(opt_cfg.betas),
+                fused=use_fused,
+            )
+        except TypeError:
+            return torch.optim.AdamW(
+                param_groups,
+                weight_decay=opt_cfg.weight_decay,
+                betas=tuple(opt_cfg.betas),
+            )
 
     def _build_scheduler(self):
         sch_cfg = self.cfg.training.scheduler

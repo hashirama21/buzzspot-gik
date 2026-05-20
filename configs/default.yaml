@@ -58,6 +58,10 @@ training:
   accumulate_grad_batches: 4
   num_gpus: 1
   precision: 16
+  amp_dtype: fp16              # fp16 (T4/V100) | bf16 (A100/L4/H100)
+  compile: false               # torch.compile — +15-35% throughput, ~60s warmup
+  cudnn_benchmark: true        # faster kernels for fixed tile size (256×256)
+  freeze_backbone_epochs: 5    # freeze DINOv2 for first N epochs (×2-3 speed early)
 
   optimizer:
     name: adamw

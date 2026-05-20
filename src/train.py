@@ -31,13 +31,14 @@ from src.training.losses.criterion import BuzzSpotCriterion
 log = logging.getLogger(__name__)
 
 
-def set_seed(seed: int) -> None:
+def set_seed(seed: int, benchmark: bool = True) -> None:
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark     = False
+    # benchmark=True finds optimal kernels for fixed input sizes (tiles = 256×256)
+    torch.backends.cudnn.benchmark     = benchmark
+    torch.backends.cudnn.deterministic = not benchmark
 
 
 def build_model(cfg: DictConfig) -> torch.nn.Module:
@@ -135,26 +136,29 @@ def build_dataloaders(cfg: DictConfig):
         )
         use_shuffle = False
 
+    nw = cfg.data.num_workers
     train_loader = DataLoader(
         train_ds,
         batch_size=cfg.training.batch_size,
         shuffle=use_shuffle,
         sampler=sampler,
-        num_workers=cfg.data.num_workers,
+        num_workers=nw,
         pin_memory=cfg.data.pin_memory,
         drop_last=True,
         collate_fn=collate_fn,
-        persistent_workers=cfg.data.num_workers > 0,
+        persistent_workers=nw > 0,
+        prefetch_factor=2 if nw > 0 else None,
     )
 
     val_loader = DataLoader(
         val_ds,
         batch_size=cfg.training.batch_size * 2,
         shuffle=False,
-        num_workers=cfg.data.num_workers,
+        num_workers=nw,
         pin_memory=cfg.data.pin_memory,
         collate_fn=collate_fn,
-        persistent_workers=cfg.data.num_workers > 0,
+        persistent_workers=nw > 0,
+        prefetch_factor=2 if nw > 0 else None,
     )
 
     return train_loader, val_loader
@@ -190,7 +194,8 @@ def main(cfg: DictConfig) -> None:
         format="%(asctime)s  %(levelname)-8s  %(name)s  %(message)s",
     )
     log.info(OmegaConf.to_yaml(cfg))
-    set_seed(cfg.project.seed)
+    benchmark = cfg.training.get("cudnn_benchmark", True)
+    set_seed(cfg.project.seed, benchmark=benchmark)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     log.info("Using device: %s", device)
