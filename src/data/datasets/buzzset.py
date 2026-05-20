@@ -154,6 +154,16 @@ class BuzzSetDataset(Dataset):
         keyframe = frames[-1]  # HWC uint8
         bboxes, labels, ann_ids, attributes = self._parse_annotations(anns)
 
+        # Rescale bboxes from annotation coordinate space (img_meta width/height)
+        # to the loaded image coordinate space (after TemporalFrameLoader resize).
+        kh, kw = keyframe.shape[:2]
+        orig_w  = img_meta.get("width",  kw)
+        orig_h  = img_meta.get("height", kh)
+        if bboxes and (orig_w != kw or orig_h != kh):
+            sx = kw / orig_w
+            sy = kh / orig_h
+            bboxes = [(x * sx, y * sy, w * sx, h * sy) for x, y, w, h in bboxes]
+
         if self.transforms and not self.is_test:
             result   = self.transforms(
                 image=keyframe,
@@ -177,7 +187,7 @@ class BuzzSetDataset(Dataset):
 
         tensor = self.frame_loader.build_tensor(frames)
 
-        target = self._build_target(img_id, bboxes, labels, attributes, img_meta)
+        target = self._build_target(img_id, bboxes, labels, attributes, img_meta, kh, kw)
 
         if self.tile_extractor is not None:
             return self.tile_extractor.extract(tensor, target)
@@ -213,9 +223,15 @@ class BuzzSetDataset(Dataset):
         labels: List[int],
         attributes: List[Dict],
         img_meta: Dict,
+        loaded_h: int = 0,
+        loaded_w: int = 0,
     ) -> Dict[str, torch.Tensor]:
-        H = img_meta["height"]
-        W = img_meta["width"]
+        # Normalise bboxes relative to the LOADED image dimensions (after resize),
+        # not the original annotation dimensions, to stay consistent with transforms.
+        H = loaded_h if loaded_h > 0 else img_meta["height"]
+        W = loaded_w if loaded_w > 0 else img_meta["width"]
+        orig_H = img_meta["height"]
+        orig_W = img_meta["width"]
 
         if len(bboxes) == 0:
             return {
@@ -225,7 +241,7 @@ class BuzzSetDataset(Dataset):
                 "occlusion": torch.zeros(0, dtype=torch.float32),
                 "area":      torch.zeros(0, dtype=torch.float32),
                 "image_id":  torch.tensor(img_id),
-                "orig_size": torch.tensor([H, W]),
+                "orig_size": torch.tensor([orig_H, orig_W]),
             }
 
         boxes_np = np.array(bboxes, dtype=np.float32)
@@ -249,7 +265,7 @@ class BuzzSetDataset(Dataset):
             "occlusion": torch.tensor([a["occlusion"] for a in attributes], dtype=torch.float32),
             "area":      torch.tensor([a["area"]      for a in attributes], dtype=torch.float32),
             "image_id":  torch.tensor(img_id),
-            "orig_size": torch.tensor([H, W]),
+            "orig_size": torch.tensor([orig_H, orig_W]),
         }
 
     def get_category_name(self, cat_id: int) -> str:
