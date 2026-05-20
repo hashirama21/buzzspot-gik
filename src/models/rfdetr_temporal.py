@@ -145,10 +145,10 @@ class RFDETRTemporal(nn.Module):
     ) -> None:
         super().__init__()
 
-        self.num_classes  = num_classes
-        self.d_model      = d_model
-        self.num_queries  = num_queries
-        self.num_frames   = num_frames
+        self.num_classes   = num_classes
+        self.d_model       = d_model
+        self.num_queries   = num_queries
+        self.num_frames    = num_frames
         self.temporal_type = temporal_type
 
         if temporal_type not in ("query_fusion", "none"):
@@ -157,9 +157,18 @@ class RFDETRTemporal(nn.Module):
                 "Supported: 'query_fusion', 'none'."
             )
 
-        self.rfdetr, self._using_real_rfdetr = self._build_backbone(
+        _raw, self._using_real_rfdetr = self._build_backbone(
             num_classes, d_model, num_queries, pretrained
         )
+
+        if self._using_real_rfdetr:
+            # _raw is RFDETRLarge (not nn.Module); drill into it to find the
+            # actual RT-DETR nn.Module and register it so .to(device) works.
+            self.rfdetr_module: nn.Module = self._extract_inner_model(_raw)
+            self._rfdetr_wrapper = _raw   # keep wrapper alive (not an nn.Module)
+        else:
+            # _raw is already the stub nn.Module
+            self.rfdetr_module: nn.Module = _raw
 
         if temporal_type == "query_fusion" and num_frames > 1:
             self.temporal_fusion: Optional[nn.Module] = TemporalQueryFusion(
@@ -198,14 +207,9 @@ class RFDETRTemporal(nn.Module):
         pixel_values: torch.Tensor,
         context_features: Optional[torch.Tensor],
     ) -> Dict[str, torch.Tensor]:
-        """Forward pass using the real rfdetr package.
-
-        rfdetr.model is a ModelContext (context manager) that wraps the actual
-        RT-DETR nn.Module. Temporal fusion is skipped — rfdetr does not expose
-        query internals. The model is used as a black box.
-        """
-        with self.rfdetr.model as inner:
-            out = inner(pixel_values)
+        """Forward pass using the real rfdetr nn.Module (temporal fusion skipped —
+        rfdetr does not expose query internals; model used as a black box)."""
+        out = self.rfdetr_module(pixel_values)
 
         # rfdetr returns a dict or a namespace; normalise to our format
         if isinstance(out, dict):
@@ -228,9 +232,9 @@ class RFDETRTemporal(nn.Module):
         context_features: Optional[torch.Tensor],
     ) -> Dict[str, torch.Tensor]:
         """Forward pass using the development stub (full temporal fusion)."""
-        encoder_out = self.rfdetr.backbone(pixel_values)  # (B, N, d_model)
+        encoder_out = self.rfdetr_module.backbone(pixel_values)  # (B, N, d_model)
 
-        queries = self.rfdetr.query_embed.weight.unsqueeze(0).expand(
+        queries = self.rfdetr_module.query_embed.weight.unsqueeze(0).expand(
             pixel_values.size(0), -1, -1
         )  # (B, Q, d_model)
 
@@ -239,10 +243,10 @@ class RFDETRTemporal(nn.Module):
             memory  = torch.cat([context_features, current], dim=1)  # (B, T, N, d)
             queries = self.temporal_fusion(queries, memory)
 
-        decoder_out = self.rfdetr.decoder(tgt=queries, memory=encoder_out)
+        decoder_out = self.rfdetr_module.decoder(tgt=queries, memory=encoder_out)
 
-        pred_logits = self.rfdetr.class_head(decoder_out)
-        pred_boxes  = self.rfdetr.bbox_head(decoder_out).sigmoid()
+        pred_logits = self.rfdetr_module.class_head(decoder_out)
+        pred_boxes  = self.rfdetr_module.bbox_head(decoder_out).sigmoid()
 
         out = {"pred_logits": pred_logits, "pred_boxes": pred_boxes}
         if self.use_attribute_heads:
@@ -255,13 +259,55 @@ class RFDETRTemporal(nn.Module):
     ) -> Optional[torch.Tensor]:
         """Encode context frames → (B, T, N, d_model), or None with real rfdetr."""
         if self._using_real_rfdetr:
-            # rfdetr does not expose the backbone separately; temporal fusion skipped.
             return None
         B, T, C, H, W = context_pixels.shape
         flat     = context_pixels.view(B * T, C, H, W)
-        features = self.rfdetr.backbone(flat)   # (B*T, N, d_model)
+        features = self.rfdetr_module.backbone(flat)   # (B*T, N, d_model)
         N, D     = features.shape[1], features.shape[2]
         return features.view(B, T, N, D)
+
+    # Inner-model extraction
+
+    @staticmethod
+    def _extract_inner_model(rfdetr_wrapper) -> nn.Module:
+        """Find the nn.Module inside the rfdetr high-level wrapper.
+
+        rfdetr stores the real RT-DETR nn.Module inside a ModelContext object
+        reachable via rfdetr_wrapper.model.  We probe common attribute names
+        and fall back to an exhaustive search so this survives rfdetr API bumps.
+        """
+        mc = getattr(rfdetr_wrapper, 'model', None)
+        if mc is None:
+            raise RuntimeError(
+                "rfdetr wrapper has no 'model' attribute — "
+                f"available: {[a for a in dir(rfdetr_wrapper) if not a.startswith('__')]}"
+            )
+
+        # Common attribute names used by rfdetr / RT-DETR implementations
+        for attr in ('model', '_model', 'module', 'net', '_net'):
+            candidate = getattr(mc, attr, None)
+            if isinstance(candidate, nn.Module):
+                return candidate
+
+        # Maybe mc itself is the nn.Module (older rfdetr versions)
+        if isinstance(mc, nn.Module):
+            return mc
+
+        # Last resort: exhaustive attribute scan
+        for attr in dir(mc):
+            if attr.startswith('__'):
+                continue
+            try:
+                candidate = getattr(mc, attr)
+            except Exception:
+                continue
+            if isinstance(candidate, nn.Module):
+                return candidate
+
+        raise RuntimeError(
+            f"Cannot find nn.Module inside rfdetr.model ({type(mc).__name__}). "
+            f"Attributes: {[a for a in dir(mc) if not a.startswith('__')]}"
+        )
 
     # Backbone builder
 
@@ -271,11 +317,10 @@ class RFDETRTemporal(nn.Module):
         d_model: int,
         num_queries: int,
         pretrained: bool,
-    ) -> Tuple[nn.Module, bool]:
+    ) -> Tuple[object, bool]:
         """Try official rfdetr package; fall back to stub with warning."""
         try:
             from rfdetr import RFDETRLarge
-            # rfdetr API: pretrain_weights=None → downloads default HuggingFace weights
             model = RFDETRLarge(
                 num_classes=num_classes,
                 pretrain_weights=None if pretrained else "",
@@ -310,7 +355,6 @@ class RFDETRTemporal(nn.Module):
                 self.class_head  = nn.Linear(_d, num_classes)
                 self.bbox_head   = nn.Linear(_d, 4)
 
-            # Expose a `backbone` attribute that returns (B, N, D)
             class _Backbone(nn.Module):
                 def __init__(self, conv, act):
                     super().__init__()
