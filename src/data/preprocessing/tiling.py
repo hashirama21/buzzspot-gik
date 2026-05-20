@@ -140,7 +140,8 @@ class TileExtractor:
         new_boxes = torch.stack([cx0, cy0, cx1, cy1], dim=1).clamp(0.0, 1.0)
 
         return {
-            **{k: v[keep] if v.shape[0] == boxes.shape[0] else v for k, v in target.items()},
+            **{k: v[keep] if v.ndim > 0 and v.shape[0] == boxes.shape[0] else v
+               for k, v in target.items()},
             "boxes": new_boxes,
             "orig_size": torch.tensor([th, tw]),
         }

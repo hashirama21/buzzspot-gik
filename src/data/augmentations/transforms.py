@@ -108,7 +108,7 @@ def get_train_transforms(tile_size: int = 256) -> A.Compose:
             A.CoarseDropout(
                 max_holes=4, max_height=32, max_width=32,
                 min_holes=1, min_height=8, min_width=8,
-                fill_value=0, p=0.3,
+                p=0.3,
             ),
 
             A.RandomSizedBBoxSafeCrop(
