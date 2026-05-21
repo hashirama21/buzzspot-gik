@@ -182,6 +182,10 @@ class RFDETRTemporal(nn.Module):
         self.use_attribute_heads = use_attribute_heads
         if use_attribute_heads:
             self.attribute_head = AttributeHead(d_model=d_model, num_attributes=2)
+            if self._using_real_rfdetr:
+                # rfdetr logits have num_classes+1 dims (includes background).
+                # Project them to d_model so AttributeHead receives the right shape.
+                self._attr_proj = nn.Linear(num_classes + 1, d_model)
 
     # Forward
 
@@ -225,9 +229,9 @@ class RFDETRTemporal(nn.Module):
 
         result = {"pred_logits": pred_logits, "pred_boxes": pred_boxes}
         if self.use_attribute_heads:
-            result["pred_attributes"] = self.attribute_head(
-                pred_logits.detach().clone()
-            )
+            # pred_logits is (B, Q, num_classes+1); project to d_model first.
+            attr_feat = self._attr_proj(pred_logits.detach())
+            result["pred_attributes"] = self.attribute_head(attr_feat)
         return result
 
     def _forward_stub(
