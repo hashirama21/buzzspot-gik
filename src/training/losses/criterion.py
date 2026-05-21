@@ -265,8 +265,17 @@ class BuzzSpotCriterion(nn.Module):
             gt_labels_flat.append(targets[b]["labels"][gt_idx])
             pred_logits_flat.append(outputs["pred_logits"][b][pred_idx])
 
-            blur = targets[b].get("blur",     torch.zeros(len(gt_idx)))[gt_idx]
-            occ  = targets[b].get("occlusion", torch.zeros(len(gt_idx)))[gt_idx]
+            n_gt   = len(targets[b]["labels"])
+            dev    = outputs["pred_logits"].device
+            blur_t = targets[b].get("blur",      torch.zeros(n_gt, device=dev))
+            occ_t  = targets[b].get("occlusion", torch.zeros(n_gt, device=dev))
+            # Guard against any size mismatch (e.g. from tiling edge cases)
+            if len(blur_t) != n_gt:
+                blur_t = torch.zeros(n_gt, device=dev)
+            if len(occ_t) != n_gt:
+                occ_t = torch.zeros(n_gt, device=dev)
+            blur = blur_t[gt_idx]
+            occ  = occ_t[gt_idx]
             w = torch.ones(len(gt_idx), device=blur.device)
             w += (self.blur_w - 1) * blur.float()
             w += (self.occ_w  - 1) * occ.float()
