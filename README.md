@@ -3,64 +3,6 @@
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/hashirama21/buzzspot-gik/blob/main/notebooks/buzzspot_pipeline.ipynb)
 
-## Project structure
-
-```
-buzzspot/
-├── configs/
-│   ├── default.yaml           ← master config (Hydra)
-│   ├── ablation_baseline.yaml ← RF-DETR without temporal
-│   └── rfdetr_mega.yaml       ← RF-DETR + MEGA temporal head
-│
-├── data/
-│   ├── datasets/buzzset.py            ← BuzzSet COCO dataset class
-│   ├── preprocessing/
-│   │   ├── temporal.py                ← frame loading: stack / diff / flow
-│   │   └── tiling.py                  ← SAHI-style tile extractor
-│   └── augmentations/
-│       ├── transforms.py              ← Albumentations pipelines
-│       └── copy_paste.py              ← SAM 2 copy-paste augmentation
-│
-├── models/
-│   └── rfdetr_temporal.py             ← RF-DETR + TemporalQueryFusion + AttributeHead
-│
-├── training/
-│   ├── trainer.py                     ← full train loop (AMP, curriculum, checkpointing)
-│   └── losses/criterion.py            ← FocalLoss + CIoU + AttributeLoss + HungarianMatcher
-│
-├── inference/
-│   └── predictors/
-│       ├── predictor.py               ← tiling + TTA + WBF inference
-│       └── pseudo_labeler.py          ← GroundingDINO + SAM2 pseudo-labeling
-│
-├── evaluation/
-│   └── metrics/coco_eval.py           ← mAP@0.5:0.95 + per-class/size/attribute
-│
-├── tools/                             ← devkit utilities (ported from official kit)
-│   ├── buzzset_loader.py              ← BuzzSetSF / BuzzSetMF dataset classes
-│   ├── evaluate.py                    ← official Codabench scoring
-│   ├── evaluate_detailed.py           ← PR curves + attribute-stratified metrics
-│   ├── convert.py                     ← COCO/YOLO single-frame conversion
-│   ├── validate_submission.py         ← Codabench submission validator
-│   ├── sahi_inferencer.py             ← SAHI-sliced RF-DETR inference
-│   └── visualize.py                   ← keyframe + context GIF visualization
-│
-├── scripts/
-│   ├── train.py                       ← training entry point (Hydra)
-│   ├── infer.py                       ← inference + predictions.json generation
-│   ├── pseudo_label.py                ← pseudo-labeling + self-training
-│   └── extract_sam2_masks.py          ← offline SAM2 mask extraction for copy-paste
-│
-├── docker/
-│   ├── Dockerfile                     ← production image for Codabench
-│   └── entrypoint.py                  ← Codabench inference entrypoint
-│
-├── tests/
-│   └── test_pipeline.py               ← unit tests (pytest)
-│
-└── requirements.txt
-```
-
 ## Quick start
 
 ### 1. Install
