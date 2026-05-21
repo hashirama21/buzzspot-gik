@@ -121,7 +121,7 @@ def get_train_transforms(tile_size: int = 256) -> A.Compose:
             A.LongestMaxSize(max_size=tile_size),
             A.PadIfNeeded(
                 min_height=tile_size, min_width=tile_size,
-                border_mode=cv2.BORDER_CONSTANT, value=0,
+                border_mode=cv2.BORDER_CONSTANT, fill=0,
             ),
             # NOTE: no Normalize / ToTensorV2 — handled by TemporalFrameLoader
         ],
@@ -144,7 +144,7 @@ def get_val_transforms(tile_size: int = 256) -> A.Compose:
             A.LongestMaxSize(max_size=tile_size),
             A.PadIfNeeded(
                 min_height=tile_size, min_width=tile_size,
-                border_mode=cv2.BORDER_CONSTANT, value=0,
+                border_mode=cv2.BORDER_CONSTANT, fill=0,
             ),
         ],
         bbox_params=bbox_params,
@@ -166,7 +166,7 @@ def get_tta_transforms(tile_size: int = 256) -> List[TTATransform]:
         A.LongestMaxSize(max_size=tile_size),
         A.PadIfNeeded(
             min_height=tile_size, min_width=tile_size,
-            border_mode=cv2.BORDER_CONSTANT, value=0,
+            border_mode=cv2.BORDER_CONSTANT, fill=0,
         ),
     ]
     return [

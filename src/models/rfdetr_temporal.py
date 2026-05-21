@@ -209,6 +209,10 @@ class RFDETRTemporal(nn.Module):
     ) -> Dict[str, torch.Tensor]:
         """Forward pass using the real rfdetr nn.Module (temporal fusion skipped —
         rfdetr does not expose query internals; model used as a black box)."""
+        # Temporal stacking produces (B, C*T, H, W); rfdetr expects 3 channels.
+        # The current frame occupies the last 3 channels.
+        if pixel_values.shape[1] != 3:
+            pixel_values = pixel_values[:, -3:, :, :]
         out = self.rfdetr_module(pixel_values)
 
         # rfdetr returns a dict or a namespace; normalise to our format
