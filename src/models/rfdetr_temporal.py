@@ -227,11 +227,18 @@ class RFDETRTemporal(nn.Module):
             pred_logits = out.pred_logits
             pred_boxes  = out.pred_boxes
 
-        result = {"pred_logits": pred_logits, "pred_boxes": pred_boxes}
+        result = {}
         if self.use_attribute_heads:
-            # pred_logits is (B, Q, num_classes+1); project to d_model first.
+            # Use full logits (num_classes+1) for attribute projection before trimming.
             attr_feat = self._attr_proj(pred_logits.detach())
             result["pred_attributes"] = self.attribute_head(attr_feat)
+
+        # rfdetr appends a background class at index -1; trim it so our criterion
+        # and matcher receive exactly num_classes logit columns.
+        pred_logits = pred_logits[..., :self.num_classes]
+
+        result["pred_logits"] = pred_logits
+        result["pred_boxes"]  = pred_boxes
         return result
 
     def _forward_stub(
