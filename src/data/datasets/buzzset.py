@@ -174,9 +174,16 @@ class BuzzSetDataset(Dataset):
             keyframe = result["image"]           # still numpy uint8
             bboxes   = list(result["bboxes"])
             labels   = list(result["class_labels"])
-            # Filter attributes to only surviving annotation IDs
-            surviving = set(result["ann_ids"])
-            attributes = [a for a in attributes if a["ann_id"] in surviving]
+            # Rebuild attributes in the same order as surviving bboxes so that
+            # len(attributes) == len(labels) regardless of albumentations internals.
+            ann_id_to_attr = {a["ann_id"]: a for a in attributes}
+            attributes = [
+                ann_id_to_attr.get(
+                    aid,
+                    {"blur": 0, "occlusion": 0, "area": 0, "ann_id": aid},
+                )
+                for aid in result["ann_ids"]
+            ]
             frames[-1] = keyframe
 
         if self.copy_paste_aug is not None and not self.is_test:

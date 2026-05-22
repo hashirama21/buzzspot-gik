@@ -17,6 +17,20 @@ import torch.nn.functional as F
 from scipy.optimize import linear_sum_assignment
 
 
+def _safe_attr(
+    target: Dict[str, torch.Tensor],
+    key: str,
+    idx: torch.Tensor,
+    device: torch.device,
+) -> torch.Tensor:
+    """Index target[key][idx] defensively against size mismatches."""
+    n_gt = len(target["labels"])
+    t = target.get(key, torch.zeros(n_gt, device=device))
+    if len(t) != n_gt:
+        t = torch.zeros(n_gt, device=device)
+    return t.to(device)[idx]
+
+
 # Focal Loss
 
 class FocalLoss(nn.Module):
@@ -265,17 +279,9 @@ class BuzzSpotCriterion(nn.Module):
             gt_labels_flat.append(targets[b]["labels"][gt_idx])
             pred_logits_flat.append(outputs["pred_logits"][b][pred_idx])
 
-            n_gt   = len(targets[b]["labels"])
-            dev    = outputs["pred_logits"].device
-            blur_t = targets[b].get("blur",      torch.zeros(n_gt, device=dev))
-            occ_t  = targets[b].get("occlusion", torch.zeros(n_gt, device=dev))
-            # Guard against any size mismatch (e.g. from tiling edge cases)
-            if len(blur_t) != n_gt:
-                blur_t = torch.zeros(n_gt, device=dev)
-            if len(occ_t) != n_gt:
-                occ_t = torch.zeros(n_gt, device=dev)
-            blur = blur_t[gt_idx]
-            occ  = occ_t[gt_idx]
+            dev  = outputs["pred_logits"].device
+            blur = _safe_attr(targets[b], "blur",      gt_idx, dev)
+            occ  = _safe_attr(targets[b], "occlusion", gt_idx, dev)
             w = torch.ones(len(gt_idx), device=blur.device)
             w += (self.blur_w - 1) * blur.float()
             w += (self.occ_w  - 1) * occ.float()
@@ -309,12 +315,15 @@ class BuzzSpotCriterion(nn.Module):
                 [outputs["pred_attributes"][b][pred_idx]
                  for b, (pred_idx, _) in enumerate(indices)]
             )
-            gt_blur = torch.cat(
-                [targets[b]["blur"][gt_idx] for b, (_, gt_idx) in enumerate(indices)]
-            )
-            gt_occ = torch.cat(
-                [targets[b]["occlusion"][gt_idx] for b, (_, gt_idx) in enumerate(indices)]
-            )
+            dev = outputs["pred_logits"].device
+            gt_blur = torch.cat([
+                _safe_attr(targets[b], "blur",      gt_idx, dev)
+                for b, (_, gt_idx) in enumerate(indices)
+            ])
+            gt_occ = torch.cat([
+                _safe_attr(targets[b], "occlusion", gt_idx, dev)
+                for b, (_, gt_idx) in enumerate(indices)
+            ])
             gt_attr = torch.stack([gt_blur, gt_occ], dim=1).to(pred_attr_m.device)
             loss_attr = F.binary_cross_entropy_with_logits(pred_attr_m, gt_attr)
 
