@@ -336,10 +336,12 @@ class RFDETRTemporal(nn.Module):
         """Try official rfdetr package; fall back to stub with warning."""
         try:
             from rfdetr import RFDETRLarge
-            model = RFDETRLarge(
-                num_classes=num_classes,
-                pretrain_weights=None if pretrained else "",
-            )
+            # pretrain_weights=None → random init; omit the arg to use the
+            # default HuggingFace checkpoint when pretrained=True.
+            kwargs = {"num_classes": num_classes}
+            if not pretrained:
+                kwargs["pretrain_weights"] = None
+            model = RFDETRLarge(**kwargs)
             return model, True
         except ImportError:
             warnings.warn(
