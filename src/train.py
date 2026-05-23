@@ -36,9 +36,12 @@ def set_seed(seed: int, benchmark: bool = True) -> None:
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
-    # benchmark=True finds optimal kernels for fixed input sizes (tiles = 256×256)
     torch.backends.cudnn.benchmark     = benchmark
     torch.backends.cudnn.deterministic = not benchmark
+    # TF32: free +20 % throughput on Ampere/Ada (L4, A100) with negligible
+    # numerical difference vs full fp32; no effect on T4 (Turing).
+    torch.backends.cuda.matmul.allow_tf32 = True
+    torch.backends.cudnn.allow_tf32       = True
 
 
 def build_model(cfg: DictConfig) -> torch.nn.Module:

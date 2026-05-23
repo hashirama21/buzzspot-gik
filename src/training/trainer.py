@@ -58,6 +58,12 @@ class BuzzSpotTrainer:
         self._amp_dtype = torch.bfloat16 if amp_dtype_str == "bf16" else torch.float16
         self.use_amp = cfg.training.precision == 16 and self.device.type == "cuda"
 
+        # Linear LR scaling: when effective batch > base_batch (4), scale LR
+        # proportionally so gradient noise stays constant across GPU tiers.
+        base_batch = 4
+        eff_batch  = cfg.training.batch_size * cfg.training.accumulate_grad_batches
+        self._lr_scale = eff_batch / (base_batch * cfg.training.accumulate_grad_batches)
+
         self.model.to(self.device)
         self.criterion.to(self.device)
 
@@ -115,8 +121,14 @@ class BuzzSpotTrainer:
             train_metrics = self._train_epoch(train_loader)
             self._log(train_metrics, prefix="train", epoch=epoch)
 
+            if self.device.type == "cuda":
+                torch.cuda.empty_cache()
+
             val_metrics = self._val_epoch(val_loader)
             self._log(val_metrics, prefix="val", epoch=epoch)
+
+            if self.device.type == "cuda":
+                torch.cuda.empty_cache()
 
             self.scheduler.step()
 
@@ -268,9 +280,10 @@ class BuzzSpotTrainer:
             else:
                 other_params.append(p)
 
+        lr = opt_cfg.lr * self._lr_scale
         param_groups = [
-            {"params": other_params,    "lr": opt_cfg.lr},
-            {"params": backbone_params, "lr": opt_cfg.lr * opt_cfg.backbone_lr_factor},
+            {"params": other_params,    "lr": lr},
+            {"params": backbone_params, "lr": lr * opt_cfg.backbone_lr_factor},
         ]
 
         # Fused AdamW: ~20% faster optimizer step on CUDA (PyTorch >= 2.0)
