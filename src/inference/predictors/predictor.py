@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import cv2
 import numpy as np
 import torch
+from ensemble_boxes import weighted_boxes_fusion as _wbf_impl
 from torch.amp import autocast
 
 from src.data.preprocessing.tiling import TileExtractor
@@ -32,81 +33,24 @@ from src.data.augmentations.transforms import (
 log = logging.getLogger(__name__)
 
 
-# Weighted Boxes Fusion
-
-def weighted_boxes_fusion(
-    boxes_list:   List[np.ndarray],
-    scores_list:  List[np.ndarray],
-    labels_list:  List[np.ndarray],
-    weights:      Optional[List[float]] = None,
+def _merge_boxes(
+    boxes_list:  List[np.ndarray],
+    scores_list: List[np.ndarray],
+    labels_list: List[np.ndarray],
     iou_thr:      float = 0.55,
     skip_box_thr: float = 0.01,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Weighted Boxes Fusion (pure numpy).
-
-    For production, swap with: `from ensemble_boxes import weighted_boxes_fusion`
-    """
+    """Weighted Boxes Fusion via ensemble_boxes. Boxes must be in [0, 1] XYXY."""
     if not boxes_list:
         return np.zeros((0, 4)), np.zeros(0), np.zeros(0, dtype=int)
-
-    if weights is None:
-        weights = [1.0] * len(boxes_list)
-
-    all_boxes  = np.vstack(boxes_list)
-    all_scores = np.hstack(scores_list)
-    all_labels = np.hstack(labels_list)
-
-    keep = all_scores >= skip_box_thr
-    all_boxes, all_scores, all_labels = all_boxes[keep], all_scores[keep], all_labels[keep]
-
-    if len(all_boxes) == 0:
-        return np.zeros((0, 4)), np.zeros(0), np.zeros(0, dtype=int)
-
-    order = np.argsort(-all_scores)
-    all_boxes  = all_boxes[order]
-    all_scores = all_scores[order]
-    all_labels = all_labels[order]
-
-    merged_boxes, merged_scores, merged_labels = [], [], []
-    used = np.zeros(len(all_boxes), dtype=bool)
-
-    for i in range(len(all_boxes)):
-        if used[i]:
-            continue
-        ious       = _iou_batch(all_boxes[i : i + 1], all_boxes)[0]
-        same_class = all_labels == all_labels[i]
-        overlap    = (ious > iou_thr) & same_class & ~used
-        overlap[i] = True
-
-        cluster_scores = all_scores[overlap]
-        w = cluster_scores / cluster_scores.sum()
-        merged_boxes.append((all_boxes[overlap] * w[:, None]).sum(axis=0))
-        merged_scores.append(cluster_scores.max())
-        merged_labels.append(all_labels[i])
-        used[overlap] = True
-
-    if not merged_boxes:
-        return np.zeros((0, 4)), np.zeros(0), np.zeros(0, dtype=int)
-
-    return (
-        np.stack(merged_boxes),
-        np.array(merged_scores),
-        np.array(merged_labels, dtype=int),
+    boxes, scores, labels = _wbf_impl(
+        boxes_list,
+        scores_list,
+        [lbl.astype(float) for lbl in labels_list],
+        iou_thr=iou_thr,
+        skip_box_thr=skip_box_thr,
     )
-
-
-def _iou_batch(boxes_a: np.ndarray, boxes_b: np.ndarray) -> np.ndarray:
-    ax1, ay1, ax2, ay2 = boxes_a[:, 0], boxes_a[:, 1], boxes_a[:, 2], boxes_a[:, 3]
-    bx1, by1, bx2, by2 = boxes_b[:, 0], boxes_b[:, 1], boxes_b[:, 2], boxes_b[:, 3]
-    ix1 = np.maximum(ax1[:, None], bx1[None])
-    iy1 = np.maximum(ay1[:, None], by1[None])
-    ix2 = np.minimum(ax2[:, None], bx2[None])
-    iy2 = np.minimum(ay2[:, None], by2[None])
-    inter = np.maximum(0, ix2 - ix1) * np.maximum(0, iy2 - iy1)
-    area_a = (ax2 - ax1) * (ay2 - ay1)
-    area_b = (bx2 - bx1) * (by2 - by1)
-    union  = area_a[:, None] + area_b[None] - inter + 1e-6
-    return inter / union
+    return np.asarray(boxes), np.asarray(scores), np.asarray(labels, dtype=int)
 
 
 # Box inversion helpers
@@ -207,7 +151,7 @@ class BuzzSpotPredictor:
                 all_labels.append(t_labels)
 
         if all_boxes:
-            merged_boxes, merged_scores, merged_labels = weighted_boxes_fusion(
+            merged_boxes, merged_scores, merged_labels = _merge_boxes(
                 all_boxes, all_scores, all_labels, iou_thr=self.wbf_iou
             )
         else:
@@ -265,7 +209,7 @@ class BuzzSpotPredictor:
             all_scores.append(scores)
             all_labels.append(labels)
 
-        return weighted_boxes_fusion(all_boxes, all_scores, all_labels)
+        return _merge_boxes(all_boxes, all_scores, all_labels)
 
     def _decode_output(
         self,

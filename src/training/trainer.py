@@ -58,11 +58,9 @@ class BuzzSpotTrainer:
         self._amp_dtype = torch.bfloat16 if amp_dtype_str == "bf16" else torch.float16
         self.use_amp = cfg.training.precision == 16 and self.device.type == "cuda"
 
-        # Linear LR scaling: when effective batch > base_batch (4), scale LR
-        # proportionally so gradient noise stays constant across GPU tiers.
-        base_batch = 4
-        eff_batch  = cfg.training.batch_size * cfg.training.accumulate_grad_batches
-        self._lr_scale = eff_batch / (base_batch * cfg.training.accumulate_grad_batches)
+        # Linear LR scaling: reference effective batch = 32 (4 samples × 8 accum steps).
+        eff_batch = cfg.training.batch_size * cfg.training.accumulate_grad_batches
+        self._lr_scale = eff_batch / 32
 
         self.model.to(self.device)
         self.criterion.to(self.device)

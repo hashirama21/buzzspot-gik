@@ -179,13 +179,30 @@ class RFDETRTemporal(nn.Module):
         else:
             self.temporal_fusion = None
 
+        if self._using_real_rfdetr and self.temporal_fusion is not None:
+            warnings.warn(
+                "TemporalQueryFusion cannot be applied to RFDETRLarge: the decoder "
+                "does not expose query internals. Context frames are ignored on this "
+                "path. Set temporal_type='none' to suppress this warning.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+
         self.use_attribute_heads = use_attribute_heads
         if use_attribute_heads:
             self.attribute_head = AttributeHead(d_model=d_model, num_attributes=2)
             if self._using_real_rfdetr:
-                # rfdetr logits have num_classes+1 dims (includes background).
-                # Project them to d_model so AttributeHead receives the right shape.
+                # Projects num_classes+1 class logits to d_model as a proxy for decoder
+                # features (which rfdetr does not expose). Blur/occlusion predictions
+                # will be limited to what class confidence implies about image quality.
                 self._attr_proj = nn.Linear(num_classes + 1, d_model)
+                warnings.warn(
+                    "AttributeHead on the real RF-DETR path trains on a class-logit "
+                    "proxy (decoder embeddings are inaccessible). "
+                    "Blur/occlusion prediction quality will be limited.",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
 
     # Forward
 
