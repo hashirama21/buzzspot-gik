@@ -1,0 +1,25 @@
+# Colab T4 GPU (15 GB VRAM, Turing, fp16 only)
+# Usage: python src/train.py --config-name=colab_t4
+defaults:
+  - default
+  - _self_
+
+data:
+  num_workers: 2
+  temporal:
+    num_frames: 1       # rfdetr discards context frames anyway; skip the 5× I/O
+    strategy: none
+
+model:
+  temporal_head:
+    type: none
+    num_frames: 1
+  attribute_heads:
+    enabled: false      # class-logit proxy is too weak; saves ~0.5 GB VRAM
+
+training:
+  batch_size: 8
+  accumulate_grad_batches: 4   # effective batch = 32
+  amp_dtype: fp16              # T4 does not support bf16
+  freeze_backbone_epochs: 3
+  log_every_n_steps: 25

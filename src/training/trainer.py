@@ -23,6 +23,7 @@ import torch.nn as nn
 from torch.amp import GradScaler, autocast
 from torch.utils.data import DataLoader
 from omegaconf import DictConfig, OmegaConf
+from tqdm.auto import tqdm
 
 from src.evaluation.metrics.coco_eval import BuzzSpotEvaluator
 
@@ -149,13 +150,15 @@ class BuzzSpotTrainer:
 
     def _train_epoch(self, loader: DataLoader) -> Dict[str, float]:
         self.model.train()
-        accum_steps  = self.cfg.training.accumulate_grad_batches
+        accum_steps = self.cfg.training.accumulate_grad_batches
+        log_every   = self.cfg.training.get("log_every_n_steps", 50)
         total_losses: Dict[str, float] = {}
         n_batches = 0
 
         self.optimizer.zero_grad()
 
-        for step, batch in enumerate(loader):
+        pbar = tqdm(loader, desc=f"Train {self.current_epoch:03d}", leave=False, dynamic_ncols=True)
+        for step, batch in enumerate(pbar):
             images  = batch["image"].to(self.device, non_blocking=True)
             targets = [
                 {k: v.to(self.device, non_blocking=True) for k, v in t.items()}
@@ -180,6 +183,16 @@ class BuzzSpotTrainer:
                 total_losses[k] = total_losses.get(k, 0.0) + v.item()
             n_batches += 1
 
+            pbar.set_postfix(
+                loss=f"{losses['loss_total'].item():.3f}",
+                cls=f"{losses['loss_cls'].item():.3f}",
+                box=f"{losses['loss_ciou'].item():.3f}",
+                lr=f"{self.optimizer.param_groups[0]['lr']:.1e}",
+            )
+
+            if self.global_step > 0 and self.global_step % log_every == 0:
+                self._log_step(losses)
+
         if n_batches % accum_steps != 0:
             self._optimizer_step()
 
@@ -193,6 +206,16 @@ class BuzzSpotTrainer:
         self.optimizer.zero_grad(set_to_none=True)
         self.global_step += 1
 
+    def _log_step(self, losses: Dict[str, torch.Tensor]) -> None:
+        if self.logger is None:
+            return
+        payload = {f"step/{k}": v.item() for k, v in losses.items()}
+        payload["step/lr"] = self.optimizer.param_groups[0]["lr"]
+        try:
+            self.logger.log(payload, step=self.global_step)
+        except Exception as exc:
+            log.debug("wandb step log failed: %s", exc)
+
     # Validation step
 
     @torch.no_grad()
@@ -200,7 +223,8 @@ class BuzzSpotTrainer:
         self.model.eval()
         self._evaluator.reset()
 
-        for batch in loader:
+        pbar = tqdm(loader, desc="Val  ", leave=False, dynamic_ncols=True)
+        for batch in pbar:
             images  = batch["image"].to(self.device, non_blocking=True)
             targets = [
                 {k: v.to(self.device, non_blocking=True) for k, v in t.items()}

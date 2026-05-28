@@ -202,6 +202,11 @@ def main(cfg: DictConfig) -> None:
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     log.info("Using device: %s", device)
+    if device.type == "cpu":
+        log.warning(
+            "CUDA not available — training on CPU will be extremely slow. "
+            "In Colab: Runtime → Change runtime type → T4 GPU, then reconnect."
+        )
 
     model            = build_model(cfg)
     criterion        = build_criterion(cfg)

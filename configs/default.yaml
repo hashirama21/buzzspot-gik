@@ -62,6 +62,7 @@ training:
   compile: false               # torch.compile — +15-35% throughput, ~60s warmup
   cudnn_benchmark: true        # faster kernels for fixed tile size (256×256)
   freeze_backbone_epochs: 5    # freeze DINOv2 for first N epochs (×2-3 speed early)
+  log_every_n_steps: 50        # wandb step-level loss/lr logging frequency
 
   optimizer:
     name: adamw
