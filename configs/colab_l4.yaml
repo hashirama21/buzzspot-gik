@@ -13,7 +13,6 @@ data:
 model:
   temporal_head:
     type: none
-    num_frames: 1
   attribute_heads:
     enabled: false
 

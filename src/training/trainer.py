@@ -178,6 +178,8 @@ class BuzzSpotTrainer:
 
             if (step + 1) % accum_steps == 0:
                 self._optimizer_step()
+                if self.global_step % log_every == 0:
+                    self._log_step(losses)
 
             for k, v in losses.items():
                 total_losses[k] = total_losses.get(k, 0.0) + v.item()
@@ -189,9 +191,6 @@ class BuzzSpotTrainer:
                 box=f"{losses['loss_ciou'].item():.3f}",
                 lr=f"{self.optimizer.param_groups[0]['lr']:.1e}",
             )
-
-            if self.global_step > 0 and self.global_step % log_every == 0:
-                self._log_step(losses)
 
         if n_batches % accum_steps != 0:
             self._optimizer_step()
@@ -252,15 +251,14 @@ class BuzzSpotTrainer:
     # Curriculum scheduling
 
     def _apply_curriculum_phase(self, loader: DataLoader, epoch: int) -> None:
-        phase1 = self.cfg.training.curriculum.phase1_epochs
-        ds     = loader.dataset
-
-        if epoch == 0 and hasattr(ds, "set_curriculum_phase"):
-            ds.set_curriculum_phase(1)
-            log.info("[Curriculum] Phase 1 — clean samples only.")
-        elif epoch == phase1 and hasattr(ds, "set_curriculum_phase"):
-            ds.set_curriculum_phase(2)
-            log.info("[Curriculum] Phase 2 — all samples (degraded weighted higher).")
+        if not hasattr(loader.dataset, "set_curriculum_phase"):
+            return
+        phase1  = self.cfg.training.curriculum.phase1_epochs
+        ds      = loader.dataset
+        target  = 1 if epoch < phase1 else 2
+        if getattr(ds, "_curriculum_phase", None) != target:
+            ds.set_curriculum_phase(target)
+            log.info("[Curriculum] Epoch %d → phase %d.", epoch, target)
 
     # Checkpoint & early stopping
 

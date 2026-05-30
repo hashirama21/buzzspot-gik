@@ -72,11 +72,11 @@ def get_train_transforms(tile_size: int = 256) -> A.Compose:
             A.HorizontalFlip(p=0.5),
             A.VerticalFlip(p=0.5),
             A.RandomRotate90(p=0.5),
-            A.ShiftScaleRotate(
-                shift_limit=0.05,
-                scale_limit=0.2,
-                rotate_limit=15,
-                border_mode=cv2.BORDER_REFLECT_101,
+            A.Affine(
+                translate_percent={"x": (-0.05, 0.05), "y": (-0.05, 0.05)},
+                scale=(0.8, 1.2),
+                rotate=(-15, 15),
+                mode=cv2.BORDER_REFLECT_101,
                 p=0.4,
             ),
 
